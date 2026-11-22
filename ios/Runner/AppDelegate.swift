@@ -2,7 +2,8 @@ import Flutter
 import UIKit
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, UIDocumentPickerDelegate {
+  private var pickerResult: FlutterResult?
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -12,5 +13,79 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    guard let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ReportEvidencePicker") else {
+      return
+    }
+    FlutterMethodChannel(
+      name: "scamshield/privacy_reference",
+      binaryMessenger: registrar.messenger()
+    ).setMethodCallHandler { call, result in
+      guard call.method == "open",
+        let url = URL(string: "https://csrc.nist.gov/pubs/sp/800/122/final") else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      UIApplication.shared.open(url) { opened in result(opened) }
+    }
+    let channel = FlutterMethodChannel(
+      name: "scamshield/report_evidence",
+      binaryMessenger: registrar.messenger()
+    )
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "pick" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard let self, self.pickerResult == nil,
+        let root = UIApplication.shared.connectedScenes
+          .compactMap({ $0 as? UIWindowScene })
+          .flatMap({ $0.windows })
+          .first(where: { $0.isKeyWindow })?.rootViewController else {
+        result(FlutterError(code: "picker", message: "Không mở được trình chọn tệp.", details: nil))
+        return
+      }
+      let picker = UIDocumentPickerViewController(
+        documentTypes: ["public.png", "public.jpeg", "com.adobe.pdf"],
+        in: .import
+      )
+      self.pickerResult = result
+      picker.delegate = self
+      root.present(picker, animated: true)
+    }
+  }
+
+  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    let result = pickerResult
+    pickerResult = nil
+    result?(nil)
+  }
+
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    let result = pickerResult
+    pickerResult = nil
+    guard let url = urls.first else {
+      result?(nil)
+      return
+    }
+    DispatchQueue.global(qos: .userInitiated).async {
+      do {
+        let file = try FileHandle(forReadingFrom: url)
+        defer { try? file.close() }
+        let bytes = try file.read(upToCount: 5 * 1024 * 1024 + 1) ?? Data()
+        guard bytes.count <= 5 * 1024 * 1024 else {
+          DispatchQueue.main.async {
+            result?(FlutterError(code: "file", message: "Tệp vượt quá 5 MB.", details: nil))
+          }
+          return
+        }
+        DispatchQueue.main.async {
+          result?(["name": url.lastPathComponent, "bytes": FlutterStandardTypedData(bytes: bytes)])
+        }
+      } catch {
+        DispatchQueue.main.async {
+          result?(FlutterError(code: "file", message: "Không đọc được tệp minh chứng.", details: nil))
+        }
+      }
+    }
   }
 }

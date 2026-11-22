@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../data/services/report_service.dart';
+import '../auth/login_screen.dart';
 
 enum _ReportTarget {
   phone(
@@ -38,8 +41,322 @@ class ReportForm extends StatefulWidget {
 }
 
 class _ReportFormState extends State<ReportForm> {
+  final _service = ReportService();
+  final _identifier = TextEditingController();
+  final _description = TextEditingController();
+  final _files = <ReportEvidence>[];
+  List<ReportOption> _regions = [];
+  List<ReportOption> _categories = [];
+  bool _loadingRegions = true;
+  String? _regionsError;
+  String? _token;
+  String? _region;
+  String? _category;
+  bool _busy = false;
   _ReportTarget? _target;
   bool _confirmed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRegions();
+  }
+
+  Future<void> _loadRegions() async {
+    try {
+      final regions = await _service.regions();
+      if (mounted) {
+        setState(() {
+          _regions = regions;
+          _regionsError = regions.isEmpty
+              ? 'Máy chủ chưa trả về danh sách tỉnh/thành.'
+              : null;
+        });
+      }
+    } on Exception {
+      if (mounted) {
+        setState(() {
+          _regionsError = 'Không tải được danh sách tỉnh/thành.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loadingRegions = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _identifier.dispose();
+    _description.dispose();
+    super.dispose();
+  }
+
+  void _message(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _run(Future<void> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await action();
+    } on FormatException catch (error) {
+      if (mounted) _message(error.message);
+    } on PlatformException catch (error) {
+      if (mounted) _message(error.message ?? 'Không thể đọc tệp minh chứng.');
+    } on Exception {
+      if (mounted) {
+        _message(
+          'Không thể hoàn thành yêu cầu. Vui lòng kiểm tra kết nối hoặc thử lại.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _selectRegion() async {
+    var query = '';
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final matches = _regions
+              .where(
+                (option) =>
+                    ' ${_regionSearchKey(option.name)}'.contains(' $query'),
+              )
+              .toList();
+          final colors = Theme.of(context).colorScheme;
+          return Dialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 18,
+              vertical: 16,
+            ),
+            constraints: const BoxConstraints(maxWidth: 390, maxHeight: 400),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on_outlined,
+                        color: colors.primary,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Chọn tỉnh/thành',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton.filledTonal(
+                        tooltip: 'Đóng',
+                        onPressed: () => Navigator.pop(dialogContext),
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Tìm tỉnh/thành',
+                      prefixIcon: const Icon(Icons.search),
+                      filled: true,
+                      fillColor: colors.secondaryContainer,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onChanged: (value) => setDialogState(
+                      () => query = _regionSearchKey(value.trim()),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Flexible(
+                    child: matches.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 18),
+                            child: Text(
+                              'Không tìm thấy tỉnh/thành.',
+                              textAlign: TextAlign.center,
+                            ),
+                          )
+                        : ListView.builder(
+                            primary: false,
+                            shrinkWrap: true,
+                            itemCount: matches.length,
+                            itemBuilder: (context, index) {
+                              final option = matches[index];
+                              return ListTile(
+                                dense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                selectedTileColor: colors.secondaryContainer,
+                                title: Text(option.name),
+                                selected: option.code == _region,
+                                trailing: option.code == _region
+                                    ? const Icon(Icons.check_circle_outline)
+                                    : null,
+                                onTap: () =>
+                                    Navigator.pop(dialogContext, option.code),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    if (mounted && selected != null) setState(() => _region = selected);
+  }
+
+  Future<void> _connect() async {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        scrollable: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        icon: Center(
+          child: CircleAvatar(
+            radius: 26,
+            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+            child: const Icon(Icons.verified_user_outlined),
+          ),
+        ),
+        title: const Text(
+          'Cần đăng nhập',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Vui lòng đăng nhập để gửi báo cáo.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(context, true),
+              icon: const Icon(Icons.login_rounded, size: 18),
+              label: const Text(
+                'Đến trang đăng nhập',
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Hủy'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || proceed != true) return;
+    final token = await Navigator.of(
+      context,
+    ).push<String>(MaterialPageRoute(builder: (_) => const LoginScreen()));
+    if (!mounted || token == null) return;
+    await _run(() async {
+      final categories = await _service.categories(token);
+      if (!mounted) return;
+      setState(() {
+        _token = token;
+        _categories = categories;
+        _category = null;
+      });
+    });
+  }
+
+  Future<void> _pickEvidence() => _run(() async {
+    final file = await const MethodChannel(
+      'scamshield/report_evidence',
+    ).invokeMapMethod<String, Object>('pick');
+    if (!mounted || file == null) return;
+    final name = file['name'] as String;
+    final bytes = file['bytes'] as Uint8List;
+    if (bytes.isEmpty ||
+        bytes.length > 5 * 1024 * 1024 ||
+        !RegExp(r'\.(png|jpe?g|pdf)$', caseSensitive: false).hasMatch(name)) {
+      _message('Chọn tệp PNG, JPG hoặc PDF không quá 5 MB.');
+      return;
+    }
+    setState(() => _files.add((name: name, bytes: bytes)));
+  });
+
+  Future<void> _submit() async {
+    final token = _token;
+    final target = _target;
+    final region = _region;
+    final category = _category;
+    final identifier = _identifier.text.trim();
+    final description = _description.text.trim();
+    if (token == null) return;
+    if (target == null ||
+        region == null ||
+        category == null ||
+        identifier.isEmpty ||
+        description.isEmpty ||
+        !_confirmed ||
+        _files.isEmpty) {
+      _message(
+        'Vui lòng điền đủ thông tin, chọn tệp minh chứng và xác nhận báo cáo.',
+      );
+      return;
+    }
+    await _run(() async {
+      final code = await _service.submit(token, {
+        'threatType': switch (target) {
+          _ReportTarget.phone => 'PHONE',
+          _ReportTarget.website => 'URL',
+          _ReportTarget.bank => 'BANK_ACCOUNT',
+        },
+        'targetIdentifier': identifier,
+        'regionCode': region,
+        'category': category,
+        'description': description,
+        'isConfirmed': true,
+      }, List.of(_files));
+      if (!mounted) return;
+      _identifier.clear();
+      _description.clear();
+      setState(() {
+        _files.clear();
+        _target = null;
+        _confirmed = false;
+        _region = null;
+        _category = null;
+      });
+      _message('Đã gửi báo cáo $code. Vui lòng theo dõi kết quả kiểm duyệt.');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +420,7 @@ class _ReportFormState extends State<ReportForm> {
                           padding: const EdgeInsets.only(bottom: 6),
                           child: RadioListTile<_ReportTarget>(
                             value: target,
+                            enabled: !_busy,
                             title: Text(target.label, style: _labelStyle),
                             controlAffinity: ListTileControlAffinity.leading,
                             secondary: Icon(
@@ -148,6 +466,8 @@ class _ReportFormState extends State<ReportForm> {
                 const SizedBox(height: 12),
                 const _RequiredLabel('Đối tượng bị báo cáo'),
                 TextFormField(
+                  controller: _identifier,
+                  readOnly: _busy,
                   keyboardType: _target?.keyboard,
                   textAlignVertical: TextAlignVertical.center,
                   decoration: _decoration(
@@ -161,27 +481,58 @@ class _ReportFormState extends State<ReportForm> {
                 ),
                 const SizedBox(height: 12),
                 const _RequiredLabel('Tỉnh/thành của bạn'),
+                if (_loadingRegions) const LinearProgressIndicator(),
                 TextFormField(
-                  enabled: false,
-                  decoration: _decoration(
-                    context,
-                    hint: 'Nhập tên để tìm và chọn tỉnh/thành',
-                    icon: Icons.location_on_outlined,
-                  ),
+                  key: ValueKey(('region', _region)),
+                  initialValue: _regions
+                      .where((option) => option.code == _region)
+                      .firstOrNull
+                      ?.name,
+                  enabled: !_busy && _regions.isNotEmpty,
+                  readOnly: true,
+                  onTap: _selectRegion,
+                  decoration:
+                      _decoration(
+                        context,
+                        hint: 'Chọn tỉnh/thành',
+                        hintMaxLines: 1,
+                        icon: Icons.location_on_outlined,
+                      ).copyWith(
+                        errorText: _regionsError,
+                        errorMaxLines: 2,
+                        suffixIcon: const Icon(Icons.arrow_drop_down),
+                      ),
                 ),
                 const SizedBox(height: 12),
                 const _RequiredLabel('Danh mục thủ đoạn'),
-                TextFormField(
-                  enabled: false,
+                DropdownButtonFormField<String>(
+                  key: ValueKey(('category', _category)),
+                  initialValue: _category,
+                  isExpanded: true,
+                  items: [
+                    for (final option in _categories)
+                      DropdownMenuItem(
+                        value: option.code,
+                        child: Text(
+                          option.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: _busy || _categories.isEmpty
+                      ? null
+                      : (value) => setState(() => _category = value),
                   decoration: _decoration(
                     context,
-                    hint: 'Chọn thủ đoạn',
                     icon: Icons.category_outlined,
                   ),
+                  hint: Text('Chọn thủ đoạn', style: _hintStyle(context)),
                 ),
                 const SizedBox(height: 12),
                 const _RequiredLabel('Mô tả ngắn gọn hành vi'),
                 TextFormField(
+                  controller: _description,
+                  readOnly: _busy,
                   minLines: 3,
                   maxLines: 5,
                   maxLength: 2000,
@@ -206,10 +557,22 @@ class _ReportFormState extends State<ReportForm> {
                   'Tệp minh chứng (Ảnh chụp đoạn chat, biên lai)',
                 ),
                 OutlinedButton.icon(
-                  onPressed: null,
+                  onPressed: _busy || _files.length >= 5 ? null : _pickEvidence,
                   icon: const Icon(Icons.attach_file),
                   label: Text('Chọn tệp minh chứng'),
                 ),
+                for (final file in _files)
+                  ListTile(
+                    dense: true,
+                    title: Text(file.name),
+                    trailing: IconButton(
+                      tooltip: 'Xóa tệp',
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() => _files.remove(file)),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ),
                 const SizedBox(height: 6),
                 _ReportNotice(
                   icon: Icons.info_outline,
@@ -268,25 +631,28 @@ class _ReportFormState extends State<ReportForm> {
                     ),
                   ),
                   value: _confirmed,
-                  onChanged: (value) =>
-                      setState(() => _confirmed = value ?? false),
+                  onChanged: _busy
+                      ? null
+                      : (value) => setState(() => _confirmed = value ?? false),
                 ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
-                  onPressed: null,
+                  onPressed: _busy
+                      ? null
+                      : (_token == null ? _connect : _submit),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(50),
                     disabledBackgroundColor: const Color(0xFFE1E9F7),
                     disabledForegroundColor: const Color(0xFF465B7D),
                   ),
                   icon: const Icon(Icons.send_outlined),
-                  label: Text('Gửi báo cáo'),
+                  label: Text(_busy ? 'Đang xử lý...' : 'Gửi báo cáo'),
                 ),
-                Text(
-                  'Tính năng gửi báo cáo đang được chuẩn bị.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: colors.onSurfaceVariant),
-                ),
+                if (_token != null)
+                  TextButton(
+                    onPressed: _busy ? null : _connect,
+                    child: const Text('Đăng nhập lại'),
+                  ),
               ],
             ),
           ),
@@ -296,7 +662,28 @@ class _ReportFormState extends State<ReportForm> {
   }
 }
 
+String _regionSearchKey(String value) => value
+    .toLowerCase()
+    .replaceAll(RegExp(r'[àáạảãâầấậẩẫăằắặẳẵ]'), 'a')
+    .replaceAll(RegExp(r'[èéẹẻẽêềếệểễ]'), 'e')
+    .replaceAll(RegExp(r'[ìíịỉĩ]'), 'i')
+    .replaceAll(RegExp(r'[òóọỏõôồốộổỗơờớợởỡ]'), 'o')
+    .replaceAll(RegExp(r'[ùúụủũưừứựửữ]'), 'u')
+    .replaceAll(RegExp(r'[ỳýỵỷỹ]'), 'y')
+    .replaceAll('đ', 'd')
+    .replaceAll(RegExp(r'[\u0300-\u036f]'), '')
+    .replaceAll(RegExp(r'\s+'), ' ');
+
 const _labelStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w700);
+
+TextStyle _hintStyle(BuildContext context) {
+  final theme = Theme.of(context);
+  return (theme.textTheme.bodyLarge ?? const TextStyle()).copyWith(
+    fontSize: 13,
+    fontWeight: FontWeight.w400,
+    color: theme.colorScheme.onSurfaceVariant,
+  );
+}
 
 InputDecoration _decoration(
   BuildContext context, {
@@ -306,10 +693,7 @@ InputDecoration _decoration(
 }) {
   return InputDecoration(
     hintText: hint,
-    hintStyle: TextStyle(
-      fontSize: 13,
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
-    ),
+    hintStyle: _hintStyle(context),
     hintMaxLines: hintMaxLines,
     isDense: true,
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),

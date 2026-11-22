@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../shared/guest_menu.dart';
@@ -68,17 +69,110 @@ class ReportScreen extends StatelessWidget {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
         title: const Text(
           'Bảo vệ thông tin khi báo cáo',
-          style: TextStyle(fontWeight: FontWeight.w800),
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
         ),
         scrollable: true,
-        content: const Text(
-          'Chỉ chia sẻ dữ liệu cần thiết để xác minh hành vi lừa đảo.\n\n'
-          '• Che tên, ảnh đại diện, địa chỉ và thông tin cá nhân không liên quan trong minh chứng.\n'
-          '• Không gửi mật khẩu, mã OTP hoặc ảnh giấy tờ tùy thân.\n'
-          '• Giữ lại số điện thoại, đường link hoặc tài khoản của đối tượng bị báo cáo để đối chiếu.\n\n'
-          'Báo cáo gắn với tài khoản của bạn để theo dõi xử lý. Hãy che dữ liệu nhạy cảm trước khi tải tệp lên.',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _PrivacyTip(
+              Icons.shield_outlined,
+              'Chỉ chia sẻ dữ liệu cần để xác minh lừa đảo.',
+            ),
+            const _PrivacyTip(
+              Icons.visibility_off_outlined,
+              'Che tên, ảnh đại diện, địa chỉ và dữ liệu cá nhân không liên quan trong minh chứng.',
+            ),
+            const _PrivacyTip(
+              Icons.lock_outline,
+              'Không gửi mật khẩu, mã OTP hoặc ảnh giấy tờ tùy thân.',
+            ),
+            const _PrivacyTip(
+              Icons.fact_check_outlined,
+              'Giữ lại số điện thoại, đường link hoặc tài khoản của đối tượng để đối chiếu.',
+            ),
+            Text(
+              'Báo cáo gắn với tài khoản của bạn để theo dõi xử lý. Hãy che dữ liệu nhạy cảm trước khi tải tệp lên.',
+              style: Theme.of(dialogContext).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 14),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: Theme.of(dialogContext).colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Nguồn tham khảo · NIST SP 800-122',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const Text(
+                      'Hướng dẫn bảo vệ thông tin nhận dạng cá nhân (PII)',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    Wrap(
+                      spacing: 4,
+                      children: [
+                        TextButton.icon(
+                          icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                          label: const Text('Mở tài liệu NIST'),
+                          onPressed: () async {
+                            var opened = false;
+                            try {
+                              opened =
+                                  await const MethodChannel(
+                                    'scamshield/privacy_reference',
+                                  ).invokeMethod<bool>('open') ??
+                                  false;
+                            } on PlatformException {
+                              opened = false;
+                            } on MissingPluginException {
+                              opened = false;
+                            }
+                            if (!opened && dialogContext.mounted) {
+                              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Không mở được trình duyệt.'),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy_outlined, size: 18),
+                          tooltip: 'Sao chép liên kết',
+                          onPressed: () async {
+                            await Clipboard.setData(
+                              const ClipboardData(
+                                text:
+                                    'https://csrc.nist.gov/pubs/sp/800/122/final',
+                              ),
+                            );
+                            if (dialogContext.mounted) {
+                              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Đã sao chép liên kết.'),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
         actions: [
           FilledButton.tonalIcon(
@@ -92,6 +186,33 @@ class ReportScreen extends StatelessWidget {
             label: const Text(
               'Đóng',
               style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrivacyTip extends StatelessWidget {
+  const _PrivacyTip(this.icon, this.text);
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 13, height: 1.35),
             ),
           ),
         ],
