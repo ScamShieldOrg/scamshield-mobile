@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_theme.dart';
-
 class ScamWarnings extends StatelessWidget {
   const ScamWarnings({super.key});
 
@@ -24,9 +22,11 @@ class ScamWarnings extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        const Text(
+        Text(
           'Tình huống minh họa',
-          style: TextStyle(color: AppTheme.mutedInk),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 12),
         const _WarningCard(
@@ -86,7 +86,9 @@ class _WarningCard extends StatelessWidget {
           padding: const EdgeInsets.only(top: 6),
           child: Text(
             category,
-            style: const TextStyle(color: AppTheme.mutedInk),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
         expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
@@ -96,7 +98,12 @@ class _WarningCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             severity,
-            style: TextStyle(color: color, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Theme.of(context).colorScheme.error
+                  : color,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
