@@ -12,6 +12,8 @@ ScamShield Mobile is a Flutter app for Android and iOS. Its Dart package name is
 
 ## Flutter UI
 
+- When changing a mobile feature that also exists on the web, review the corresponding ScamShield web app flow and adapt relevant interaction, validation, and input formatting patterns to mobile.
+
 - Keep screens focused on layout and navigation. Extract parts with distinct responsibilities, such as forms, warning lists, and menus, into separate widgets. Reuse existing widgets where appropriate.
 - Keep input validation and business logic outside widgets so they can be tested independently. Release controllers created by a widget in its `dispose` method.
 - Use `AppTheme` for shared colors and styles. When adapting the web UI, check the web source and preserve ScamShield VN's navy, blue, and light purple-gray palette. Avoid green in the UI.
