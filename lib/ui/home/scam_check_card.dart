@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../data/repositories/scam_check_repository.dart';
+import '../../data/services/scam_check_service.dart';
 import '../report/report_target_validation.dart';
+import 'scam_check_result_card.dart';
 import 'scam_check_validation.dart';
 
 enum _CheckType {
@@ -44,7 +47,13 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
   TextEditingController get _controller => _drafts[_type]!;
   final _formKey = GlobalKey<FormState>();
   _CheckType _type = _CheckType.message;
-  String? _summary;
+  final _repository = ScamCheckRepository();
+  ScamCheckQuota? _quota;
+  ScamCheckResult? _result;
+  String? _quotaError;
+  String? _scanError;
+  bool _busy = false;
+  bool _scanning = false;
   Timer? _validationTimer;
   String? _inputError;
 
@@ -54,6 +63,12 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
     _CheckType.phone => ReportTargetType.phone,
     _CheckType.bank => ReportTargetType.bank,
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshQuota();
+  }
 
   @override
   void dispose() {
@@ -95,7 +110,8 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
     final shouldValidate = _reportType != null && input.isNotEmpty;
     final debounce = _type == _CheckType.phone || _type == _CheckType.url;
     setState(() {
-      _summary = null;
+      _result = null;
+      _scanError = null;
       _inputError = shouldValidate && !debounce ? _validate(input) : null;
     });
     if (shouldValidate && debounce) {
@@ -106,22 +122,89 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
     }
   }
 
-  void _check() {
+  Future<void> _refreshQuota() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await _updateQuota(_repository.refreshQuota());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<bool> _updateQuota(Future<ScamCheckQuota> request) async {
+    try {
+      final quota = await request;
+      if (mounted) {
+        setState(() {
+          _quota = quota;
+          _quotaError = null;
+        });
+      }
+      return true;
+    } on Exception catch (error) {
+      if (mounted) {
+        setState(() {
+          _quota = null;
+          _quotaError = error is ScamCheckApiException
+              ? error.message
+              : 'Chưa tải được số lượt kiểm tra. Vui lòng cập nhật lại.';
+        });
+      }
+      return false;
+    }
+  }
+
+  Future<void> _check() async {
+    if (_busy) return;
     _validationTimer?.cancel();
     if (!_formKey.currentState!.validate()) {
       return;
     }
     final input = _controller.text.trim();
+    final type = switch (_type) {
+      _CheckType.message => 'MESSAGE',
+      _CheckType.url => 'URL',
+      _CheckType.phone => 'PHONE',
+      _CheckType.bank => 'BANK_ACCOUNT',
+    };
     FocusScope.of(context).unfocus();
     setState(() {
-      _summary = switch (_type) {
-        _CheckType.bank =>
-          'Số tài khoản: ${normalizeScamCheckBankAccount(input)}',
-        _CheckType.message => 'Định dạng tin nhắn hợp lệ.',
-        _CheckType.url => 'Tên miền: ${parseScamCheckLink(input)!.host}',
-        _CheckType.phone => 'Số đã nhập: ${normalizeScamCheckPhone(input)}',
-      };
+      _busy = true;
+      _result = null;
+      _scanError = null;
     });
+    try {
+      if (!await _updateQuota(_repository.refreshQuota()) ||
+          !mounted ||
+          _quota!.remaining == 0) {
+        return;
+      }
+      setState(() => _scanning = true);
+      var restoreSession = false;
+      try {
+        final result = await _repository.analyze(type, input);
+        if (mounted) setState(() => _result = result);
+      } on ScamCheckApiException catch (error) {
+        restoreSession = error.statusCode == 401;
+        if (mounted) setState(() => _scanError = error.message);
+      } finally {
+        if (mounted) {
+          await _updateQuota(
+            restoreSession
+                ? _repository.refreshQuota()
+                : _repository.currentQuota(),
+          );
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _scanning = false;
+        });
+      }
+    }
   }
 
   Future<void> _paste() async {
@@ -143,7 +226,7 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
       }
       return;
     }
-    if (!mounted || _type != type || draft.value != previous) {
+    if (!mounted || _busy || _type != type || draft.value != previous) {
       return;
     }
     final value = clipboard?.text?.trim();
@@ -184,7 +267,9 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final summary = _summary;
+    final quota = _quota;
+    final result = _result;
+    final exhausted = quota?.remaining == 0;
     final colors = theme.colorScheme;
     final input = _controller.text;
     final indicators = _type == _CheckType.message
@@ -200,6 +285,77 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(12, 4, 6, 12),
+                decoration: BoxDecoration(
+                  color: colors.secondaryContainer,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.bolt_outlined,
+                          color: colors.primary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Semantics(
+                            liveRegion: true,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Lượt kiểm tra miễn phí',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  quota == null
+                                      ? (_busy
+                                            ? 'Đang tải số lượt…'
+                                            : 'Chưa tải được số lượt')
+                                      : 'Còn ${quota.remaining}/${quota.limit} lượt hôm nay',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Cập nhật số lượt',
+                          onPressed: _busy ? null : _refreshQuota,
+                          icon: const Icon(Icons.refresh),
+                        ),
+                      ],
+                    ),
+                    if (quota != null && quota.limit > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: LinearProgressIndicator(
+                          value: quota.remaining / quota.limit,
+                          semanticsLabel: 'Tỷ lệ lượt kiểm tra còn lại',
+                          color: colors.primary,
+                          backgroundColor: colors.surface,
+                          minHeight: 6,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (_quotaError case final error?)
+                Text(error, style: TextStyle(color: colors.error)),
+              if (exhausted)
+                Text(
+                  'Bạn đã hết lượt kiểm tra hôm nay.',
+                  style: TextStyle(color: colors.error),
+                ),
+              const SizedBox(height: 8),
               Wrap(
                 spacing: 7,
                 runSpacing: 4,
@@ -230,15 +386,17 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
                       ),
                       selected: _type == type,
                       showCheckmark: false,
-                      onSelected: (selected) {
-                        if (selected && _type != type) {
-                          FocusScope.of(context).unfocus();
-                          setState(() {
-                            _type = type;
-                          });
-                          _inputChanged();
-                        }
-                      },
+                      onSelected: _busy
+                          ? null
+                          : (selected) {
+                              if (selected && _type != type) {
+                                FocusScope.of(context).unfocus();
+                                setState(() {
+                                  _type = type;
+                                });
+                                _inputChanged();
+                              }
+                            },
                     ),
                 ],
               ),
@@ -265,6 +423,7 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
               TextFormField(
                 key: ValueKey(_type),
                 controller: _controller,
+                readOnly: _busy,
                 minLines: _type == _CheckType.message ? 4 : 1,
                 maxLines: _type == _CheckType.message ? 5 : 1,
                 keyboardType: switch (_type) {
@@ -332,12 +491,12 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
                 spacing: 6,
                 children: [
                   OutlinedButton.icon(
-                    onPressed: _paste,
+                    onPressed: _busy ? null : _paste,
                     icon: const Icon(Icons.content_paste_outlined, size: 18),
                     label: const Text('Dán nhanh'),
                   ),
                   TextButton.icon(
-                    onPressed: input.isEmpty
+                    onPressed: _busy || input.isEmpty
                         ? null
                         : () {
                             _controller.clear();
@@ -350,9 +509,11 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
               ),
               const SizedBox(height: 6),
               FilledButton.icon(
-                onPressed: input.trim().isEmpty ? null : _check,
+                onPressed: _busy || exhausted || input.trim().isEmpty
+                    ? null
+                    : _check,
                 icon: const Icon(Icons.bolt),
-                label: const Text('Kiểm tra định dạng'),
+                label: Text(_scanning ? 'Đang phân tích…' : 'Phân tích'),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(48),
                   backgroundColor: AppTheme.blue,
@@ -362,18 +523,17 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              Semantics(
-                liveRegion: true,
-                child: Text(
-                  summary == null
-                      ? 'Chế độ kiểm tra đầu vào. Phân tích rủi ro cần kết nối máy chủ.'
-                      : '$summary\nChưa có kết quả đánh giá rủi ro.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+              if (_scanError case final error?) ...[
+                const SizedBox(height: 12),
+                Semantics(
+                  liveRegion: true,
+                  child: Text(error, style: TextStyle(color: colors.error)),
                 ),
-              ),
+              ],
+              if (result != null) ...[
+                const SizedBox(height: 16),
+                ScamCheckResultCard(result: result, inputLabel: _type.label),
+              ],
             ],
           ),
         ),
