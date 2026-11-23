@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../education/education_screen.dart';
 import 'scamshield_header.dart';
 import 'scamshield_navigation.dart';
 
 enum _GuestDestination {
-  history('Lịch Sử Kiểm Tra', Icons.history),
-  myReports('Báo Cáo Của Tôi', Icons.folder_shared_outlined),
+  history('Lịch sử kiểm tra', Icons.history),
+  myReports('Báo cáo của tôi', Icons.folder_shared_outlined),
   myAppeals('Khiếu nại của tôi', Icons.gavel_outlined);
 
   const _GuestDestination(this.title, this.icon);
@@ -15,11 +16,17 @@ enum _GuestDestination {
 }
 
 class GuestMenu extends StatelessWidget {
-  const GuestMenu({super.key, this.onSignOut, this.onLightModeChanged});
+  const GuestMenu({
+    super.key,
+    this.onSignOut,
+    this.onLightModeChanged,
+    this.isEducationOpen = false,
+  });
 
   /// Supplied only while an authenticated session is active.
   final VoidCallback? onSignOut;
   final ValueChanged<bool>? onLightModeChanged;
+  final bool isEducationOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +81,25 @@ class GuestMenu extends StatelessWidget {
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
+                  ListTile(
+                    leading: const _MenuIcon(icon: Icons.menu_book_outlined),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+                    title: const Text('Cẩm nang an toàn'),
+                    selected: isEducationOpen,
+                    onTap: () {
+                      final navigator = Navigator.of(context);
+                      navigator.pop();
+                      if (isEducationOpen) return;
+                      navigator.push<void>(
+                        MaterialPageRoute(
+                          builder: (_) => EducationScreen(
+                            onSignOut: onSignOut,
+                            onLightModeChanged: onLightModeChanged,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                   for (final destination in _GuestDestination.values)
                     ListTile(
                       leading: _MenuIcon(icon: destination.icon),
