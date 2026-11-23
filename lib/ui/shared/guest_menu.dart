@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../data/models/auth_user.dart';
+import 'scam_shield_brand_badge.dart';
 
 enum _GuestDestination {
   check('Kiểm tra', Icons.manage_search_outlined),
@@ -16,13 +18,29 @@ enum _GuestDestination {
 }
 
 class GuestMenu extends StatelessWidget {
-  const GuestMenu({super.key, this.onSignOut});
+  const GuestMenu({
+    super.key,
+    this.user,
+    this.onLogin,
+    this.onSignOut,
+  });
+
+  /// Supplied when an authenticated session is active.
+  final AuthUser? user;
+
+  /// Invoked when the user chooses to sign in from the drawer.
+  final VoidCallback? onLogin;
 
   /// Supplied only while an authenticated session is active.
   final VoidCallback? onSignOut;
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = user;
+    final secondaryIdentity = currentUser?.email?.isNotEmpty == true
+        ? currentUser!.email!
+        : currentUser?.phoneNumber;
+
     return Drawer(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.transparent,
@@ -30,16 +48,11 @@ class GuestMenu extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
           children: [
-            const ListTile(
-              leading: Icon(Icons.shield_outlined, color: AppTheme.navy),
-              title: Text(
-                'ScamShield VN',
-                style: TextStyle(
-                  fontFamily: 'sans-serif',
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: ScamShieldBrandBadge(),
             ),
+            const SizedBox(height: 8),
             const Divider(),
             for (final destination in _GuestDestination.values)
               ListTile(
@@ -71,6 +84,62 @@ class GuestMenu extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
+            if (currentUser != null) ...[
+              Container(
+                margin: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.page,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      currentUser.displayName,
+                      style: const TextStyle(
+                        fontFamily: 'sans-serif',
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.ink,
+                      ),
+                    ),
+                    if (secondaryIdentity != null &&
+                        secondaryIdentity != currentUser.displayName) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        secondaryIdentity,
+                        style: const TextStyle(
+                          fontFamily: 'sans-serif',
+                          fontSize: 12.5,
+                          color: AppTheme.mutedInk,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.muted,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        currentUser.roleLabel,
+                        style: const TextStyle(
+                          fontFamily: 'sans-serif',
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.navy,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (onSignOut case final signOut?)
               ListTile(
                 leading: const Icon(Icons.logout),
@@ -84,13 +153,22 @@ class GuestMenu extends StatelessWidget {
               ListTile(
                 leading: const Icon(Icons.login),
                 title: const Text('Đăng nhập'),
-                onTap: () => _openAccountInfo(context, 'Đăng nhập'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  if (onLogin != null) {
+                    onLogin!();
+                  } else {
+                    _openAccountInfo(context, 'Đăng nhập');
+                  }
+                },
               ),
               ListTile(
                 leading: const Icon(Icons.person_add_alt_outlined),
                 title: const Text('Tạo tài khoản miễn phí'),
-                onTap: () =>
-                    _openAccountInfo(context, 'Tạo tài khoản miễn phí'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _openAccountInfo(context, 'Tạo tài khoản miễn phí');
+                },
               ),
             ],
           ],
@@ -100,16 +178,14 @@ class GuestMenu extends StatelessWidget {
   }
 
   void _openAccountInfo(BuildContext context, String title) {
-    final navigator = Navigator.of(context);
-    navigator.pop();
-    navigator.push<void>(
+    Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => _SectionPage(
           title: title,
           cards: const [
             (
-              'Chưa kết nối tài khoản',
-              'Ứng dụng di động chưa kết nối dịch vụ tài khoản. Bạn vẫn có thể sử dụng chế độ khách.',
+              'Tính năng đang phát triển',
+              'Màn hình tạo tài khoản trên di động đang được hoàn thiện. Bạn có thể đăng nhập bằng tài khoản đã có hoặc dùng chế độ khách.',
             ),
           ],
         ),
