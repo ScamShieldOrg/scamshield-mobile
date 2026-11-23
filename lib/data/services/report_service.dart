@@ -27,25 +27,6 @@ class ReportService {
     return data;
   }
 
-  Future<String> signIn(String identifier, String password) async {
-    final response = await http
-        .post(
-          ApiConfig.endpoint('/auth/login'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'usernameOrPhoneNumber': identifier,
-            'password': password,
-          }),
-        )
-        .timeout(const Duration(seconds: 20));
-    final body = _body(response);
-    final token = body['data']?['accessToken'] ?? body['accessToken'];
-    if (token is! String || token.isEmpty) {
-      throw const FormatException('Máy chủ chưa cấp phiên đăng nhập.');
-    }
-    return token;
-  }
-
   Future<List<ReportOption>> categories(String token) async {
     final response = await http
         .get(
