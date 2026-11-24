@@ -36,7 +36,9 @@ enum _ReportTarget {
 }
 
 class ReportForm extends StatefulWidget {
-  const ReportForm({super.key});
+  const ReportForm({super.key, this.accessToken});
+
+  final String? accessToken;
 
   @override
   State<ReportForm> createState() => _ReportFormState();
@@ -52,10 +54,12 @@ class _ReportFormState extends State<ReportForm> {
   final _description = TextEditingController();
   final _files = <ReportEvidence>[];
   List<ReportOption> _regions = [];
-  final List<ReportOption> _categories = const [];
+  List<ReportOption> _categories = const [];
   bool _loadingRegions = true;
   String? _regionsError;
-  final String? _token = null;
+  bool _loadingCategories = false;
+  String? _categoriesError;
+  int _categoryRequest = 0;
   String? _region;
   String? _category;
   bool _busy = false;
@@ -71,6 +75,43 @@ class _ReportFormState extends State<ReportForm> {
       }
     });
     _loadRegions();
+    _loadCategories();
+  }
+
+  @override
+  void didUpdateWidget(covariant ReportForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.accessToken != widget.accessToken) _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    final token = widget.accessToken;
+    final request = ++_categoryRequest;
+    setState(() {
+      _category = null;
+      _categories = const [];
+      _categoriesError = null;
+      _loadingCategories = token != null;
+    });
+    if (token == null) return;
+
+    try {
+      final categories = await _service.categories(token);
+      if (!mounted || request != _categoryRequest) return;
+      setState(() {
+        _categories = categories;
+        _loadingCategories = false;
+        if (categories.isEmpty) {
+          _categoriesError = 'Chưa có danh mục thủ đoạn.';
+        }
+      });
+    } on Exception {
+      if (!mounted || request != _categoryRequest) return;
+      setState(() {
+        _loadingCategories = false;
+        _categoriesError = 'Không tải được danh mục thủ đoạn.';
+      });
+    }
   }
 
   Future<void> _loadRegions() async {
@@ -335,7 +376,7 @@ class _ReportFormState extends State<ReportForm> {
   });
 
   Future<void> _submit() async {
-    final token = _token;
+    final token = widget.accessToken;
     final target = _target;
     final region = _region;
     final category = _category;
@@ -417,7 +458,7 @@ class _ReportFormState extends State<ReportForm> {
       _guideToTarget();
       return;
     }
-    if (_token != null) {
+    if (widget.accessToken != null) {
       _submit();
     } else if (_validateIdentifierBeforeSubmit()) {
       _showLoginRequired();
@@ -636,10 +677,23 @@ class _ReportFormState extends State<ReportForm> {
                     decoration: _decoration(
                       context,
                       icon: Icons.category_outlined,
+                    ).copyWith(errorText: _categoriesError, errorMaxLines: 2),
+                    hint: Text(
+                      _loadingCategories
+                          ? 'Đang tải danh mục…'
+                          : 'Chọn thủ đoạn',
+                      style: _hintStyle(context),
                     ),
-                    hint: Text('Chọn thủ đoạn', style: _hintStyle(context)),
                   ),
                 ),
+                if (_categoriesError != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: _loadCategories,
+                      child: const Text('Thử lại'),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 const _RequiredLabel('Mô tả ngắn gọn hành vi'),
                 _requireTarget(

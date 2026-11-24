@@ -93,7 +93,9 @@ class ReportService {
           .timeout(const Duration(minutes: 2));
       final body = _body(response);
       final data = body['data'];
-      if (body['isSuccess'] != true || data is! Map || data['id'] is! num) {
+      if ((body['isSuccess'] ?? body['success']) != true ||
+          data is! Map ||
+          data['id'] is! num) {
         throw const FormatException('Chưa nhận được xác nhận lưu báo cáo.');
       }
       return data['reportCode']?.toString() ?? '#RPT-${data['id']}';

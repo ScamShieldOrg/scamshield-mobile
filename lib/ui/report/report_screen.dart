@@ -8,8 +8,14 @@ import '../shared/scamshield_navigation.dart';
 import 'report_form.dart';
 
 class ReportScreen extends StatelessWidget {
-  const ReportScreen({super.key, this.onSignOut, this.onLightModeChanged});
+  const ReportScreen({
+    super.key,
+    this.accessToken,
+    this.onSignOut,
+    this.onLightModeChanged,
+  });
 
+  final String? accessToken;
   final VoidCallback? onSignOut;
   final ValueChanged<bool>? onLightModeChanged;
 
@@ -56,7 +62,7 @@ class ReportScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 18),
-                const ReportForm(),
+                ReportForm(accessToken: accessToken),
               ],
             ),
           ),
