@@ -26,6 +26,20 @@ abstract final class AppTheme {
   static const mutedInk = Color(0xFF565E6B);
   static const border = Color(0xFFE2E8F0);
 
+  static ({Color foreground, Color background, Color border}) verifiedColors(
+    Brightness brightness,
+  ) => brightness == Brightness.dark
+      ? (
+          foreground: const Color(0xFF6EE7B7),
+          background: const Color(0xFF123329),
+          border: const Color(0xFF235D49),
+        )
+      : (
+          foreground: const Color(0xFF047857),
+          background: const Color(0xFFECFDF5),
+          border: const Color(0xFFA7F3D0),
+        );
+
   static final ThemeData light = ThemeData(
     colorScheme: const ColorScheme.light(
       primary: navy,

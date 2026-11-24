@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../education/education_screen.dart';
+import '../resources/resource_screen.dart';
 import 'scamshield_header.dart';
 import 'scamshield_navigation.dart';
 
@@ -21,12 +22,14 @@ class GuestMenu extends StatelessWidget {
     this.onSignOut,
     this.onLightModeChanged,
     this.isEducationOpen = false,
+    this.isResourcesOpen = false,
   });
 
   /// Supplied only while an authenticated session is active.
   final VoidCallback? onSignOut;
   final ValueChanged<bool>? onLightModeChanged;
   final bool isEducationOpen;
+  final bool isResourcesOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +85,28 @@ class GuestMenu extends StatelessWidget {
               child: Column(
                 children: [
                   ListTile(
+                    leading: const _MenuIcon(icon: Icons.manage_search_rounded),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+                    title: const Text('Tra cứu tài nguyên'),
+                    selected: isResourcesOpen,
+                    onTap: () {
+                      final navigator = Navigator.of(context);
+                      navigator.pop();
+                      if (isResourcesOpen) return;
+                      final route = MaterialPageRoute<void>(
+                        builder: (_) => ResourceScreen(
+                          onSignOut: onSignOut,
+                          onLightModeChanged: onLightModeChanged,
+                        ),
+                      );
+                      if (isEducationOpen) {
+                        navigator.pushReplacement(route);
+                      } else {
+                        navigator.push(route);
+                      }
+                    },
+                  ),
+                  ListTile(
                     leading: const _MenuIcon(icon: Icons.menu_book_outlined),
                     trailing: const Icon(Icons.chevron_right_rounded, size: 18),
                     title: const Text('Cẩm nang an toàn'),
@@ -90,14 +115,17 @@ class GuestMenu extends StatelessWidget {
                       final navigator = Navigator.of(context);
                       navigator.pop();
                       if (isEducationOpen) return;
-                      navigator.push<void>(
-                        MaterialPageRoute(
-                          builder: (_) => EducationScreen(
-                            onSignOut: onSignOut,
-                            onLightModeChanged: onLightModeChanged,
-                          ),
+                      final route = MaterialPageRoute<void>(
+                        builder: (_) => EducationScreen(
+                          onSignOut: onSignOut,
+                          onLightModeChanged: onLightModeChanged,
                         ),
                       );
+                      if (isResourcesOpen) {
+                        navigator.pushReplacement(route);
+                      } else {
+                        navigator.push(route);
+                      }
                     },
                   ),
                   for (final destination in _GuestDestination.values)
