@@ -19,6 +19,9 @@ class ScamShieldBrandBadge extends StatelessWidget {
         : AppTheme.navy;
     final iconColor = darkSurface ? Colors.white : AppTheme.shieldBlue;
     final titleColor = darkSurface ? Colors.white : AppTheme.ink;
+    final subtitleColor = darkSurface
+        ? Colors.white.withValues(alpha: 0.68)
+        : AppTheme.mutedInk;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -92,7 +95,7 @@ class ScamShieldBrandBadge extends StatelessWidget {
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.8,
-                    color: Colors.white.withValues(alpha: 0.68),
+                    color: subtitleColor,
                   ),
                 ),
               ],
