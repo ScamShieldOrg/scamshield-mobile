@@ -6,11 +6,13 @@ import 'package:provider/provider.dart';
 import '../../app/auth_state.dart';
 import '../../app/user_quota_state.dart';
 import '../../core/theme/app_theme.dart';
+import '../../data/repositories/dispute_repository.dart';
 import '../auth/login_screen.dart';
 import '../shared/ai_quota_banner.dart';
 import '../shared/user_app_bar.dart';
 import '../shared/user_bottom_nav.dart';
 import '../shared/user_sidebar_drawer.dart';
+import 'dispute_tracking_screen.dart';
 import 'submit_dispute_validation.dart';
 
 class SubmitDisputeScreen extends StatefulWidget {
@@ -30,8 +32,8 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
   final _indicatorController = TextEditingController();
   final _reasonController = TextEditingController();
 
-  int _selectedTabIndex = 0;
   bool _isLightMode = true;
+  int? _submittedDisputeCount;
   DisputeIndicatorType _indicatorType = DisputeIndicatorType.phone;
   DisputeLegalRelationship _legalRelationship =
       DisputeLegalRelationship.legalRepresentative;
@@ -54,7 +56,38 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
       if (quotaState != null && !quotaState.isLoading) {
         quotaState.refresh();
       }
+      _loadDisputeCount();
     });
+  }
+
+  Future<void> _loadDisputeCount() async {
+    final authState = context.read<AuthState?>();
+    final token = authState?.session?.accessToken;
+    if (token == null || token.isEmpty) {
+      return;
+    }
+    final repository = context.read<DisputeRepository?>();
+    if (repository == null) {
+      return;
+    }
+    try {
+      final summary = await repository.fetchMySummary(accessToken: token);
+      if (mounted) {
+        setState(() => _submittedDisputeCount = summary.totalSubmitted);
+      }
+    } catch (_) {
+      // Keep count omitted when summary endpoint is unavailable.
+    }
+  }
+
+  void _openDisputeTracking() {
+    Navigator.of(context).pushReplacement<void, void>(
+      PageRouteBuilder<void>(
+        pageBuilder: (_, _, _) => const DisputeTrackingScreen(),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
   }
 
   @override
@@ -494,12 +527,9 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
               const SizedBox(height: 18),
               _buildSegmentedTabs(),
               const SizedBox(height: 16),
-              if (_selectedTabIndex == 0) ...[
-                _buildDisputeFormCard(),
-                const SizedBox(height: 14),
-                _buildImportantNotesCard(),
-              ] else
-                _buildDisputeProgressPlaceholder(),
+              _buildDisputeFormCard(),
+              const SizedBox(height: 14),
+              _buildImportantNotesCard(),
             ],
           ),
         ),
@@ -508,6 +538,10 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
   }
 
   Widget _buildSegmentedTabs() {
+    final trackingLabel = _submittedDisputeCount != null
+        ? 'Tiến Trình Đơn ($_submittedDisputeCount)'
+        : 'Tiến Trình Đơn';
+
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -517,43 +551,30 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
       child: Row(
         children: [
           Expanded(
-            child: GestureDetector(
+            child: Container(
               key: const ValueKey('dispute_tab_submit'),
-              onTap: () => setState(() => _selectedTabIndex = 0),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                padding: const EdgeInsets.symmetric(
-                  vertical: 11,
-                  horizontal: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: _selectedTabIndex == 0
-                      ? Colors.white
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(11),
-                  boxShadow: _selectedTabIndex == 0
-                      ? [
-                          BoxShadow(
-                            color: AppTheme.navy.withValues(alpha: 0.06),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Text(
-                  'Nộp đơn phản chứng',
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: 'sans-serif',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: _selectedTabIndex == 0
-                        ? AppTheme.ink
-                        : AppTheme.mutedInk,
+              padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(11),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.navy.withValues(alpha: 0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
+                ],
+              ),
+              child: const Text(
+                'Nộp đơn phản chứng',
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'sans-serif',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.ink,
                 ),
               ),
             ),
@@ -561,27 +582,15 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
           Expanded(
             child: GestureDetector(
               key: const ValueKey('dispute_tab_progress'),
-              onTap: () => setState(() => _selectedTabIndex = 1),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
+              onTap: _openDisputeTracking,
+              child: Container(
                 padding: const EdgeInsets.symmetric(
                   vertical: 11,
                   horizontal: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: _selectedTabIndex == 1
-                      ? Colors.white
-                      : Colors.transparent,
+                  color: Colors.transparent,
                   borderRadius: BorderRadius.circular(11),
-                  boxShadow: _selectedTabIndex == 1
-                      ? [
-                          BoxShadow(
-                            color: AppTheme.navy.withValues(alpha: 0.06),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : null,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -597,16 +606,14 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        'Tiến Trình Đơn (3)',
+                        trackingLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontFamily: 'sans-serif',
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: _selectedTabIndex == 1
-                              ? AppTheme.ink
-                              : AppTheme.navy,
+                          color: AppTheme.navy,
                         ),
                       ),
                     ),
@@ -1241,45 +1248,6 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
               ),
             ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildDisputeProgressPlaceholder() {
-    return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: AppTheme.border),
-      ),
-      child: const Padding(
-        padding: EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Icon(Icons.assignment_outlined, size: 36, color: AppTheme.blue),
-            SizedBox(height: 10),
-            Text(
-              'Tiến Trình Đơn Khiếu Nại',
-              style: TextStyle(
-                fontFamily: 'sans-serif',
-                fontSize: 15.5,
-                fontWeight: FontWeight.w800,
-                color: AppTheme.ink,
-              ),
-            ),
-            SizedBox(height: 6),
-            Text(
-              'Danh sách theo dõi tiến trình thẩm định các đơn đã nộp sẽ hiển thị khi kết nối API khiếu nại.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'sans-serif',
-                fontSize: 13,
-                color: AppTheme.mutedInk,
-                height: 1.45,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
