@@ -7,7 +7,7 @@ void main() {
     app.main();
     await tester.pumpAndSettle();
 
-    expect(find.text('ScamShield VN'), findsOneWidget);
-    expect(find.byIcon(Icons.shield_outlined), findsOneWidget);
+    expect(find.text('ScamShield'), findsOneWidget);
+    expect(find.byIcon(Icons.verified_user_outlined), findsOneWidget);
   });
 }
