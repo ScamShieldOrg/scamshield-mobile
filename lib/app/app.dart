@@ -16,6 +16,13 @@ class ScamShieldApp extends StatelessWidget {
   final bool restoreSessionOnStart;
 
   @override
+  State<ScamShieldApp> createState() => _ScamShieldAppState();
+}
+
+class _ScamShieldAppState extends State<ScamShieldApp> {
+  ThemeMode _themeMode = ThemeMode.light;
+
+  @override
   Widget build(BuildContext context) {
     final repository = authRepository ?? AuthRepository();
 

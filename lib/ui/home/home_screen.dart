@@ -11,9 +11,10 @@ import 'scam_check_card.dart';
 import 'scam_warnings.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, this.onSignOut});
+  const HomeScreen({super.key, this.onSignOut, this.onLightModeChanged});
 
   final VoidCallback? onSignOut;
+  final ValueChanged<bool>? onLightModeChanged;
 
   void _openLogin(BuildContext context) {
     Navigator.of(context).push<bool>(

@@ -112,16 +112,22 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
                       avatar: Icon(
                         type.icon,
                         size: 17,
-                        color: _type == type ? Colors.white : AppTheme.mutedInk,
+                        color: _type == type
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                      backgroundColor: AppTheme.muted,
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.secondaryContainer,
                       selectedColor: AppTheme.blue,
                       side: BorderSide.none,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                       labelStyle: TextStyle(
-                        color: _type == type ? Colors.white : AppTheme.mutedInk,
+                        color: _type == type
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w700,
                       ),
                       selected: _type == type,
@@ -165,10 +171,22 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
                 decoration: InputDecoration(
                   hintText: _type.hint,
                   filled: true,
-                  fillColor: AppTheme.page,
+                  fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 2,
+                    ),
                   ),
                 ),
               ),
@@ -214,7 +232,7 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
                       ? 'Chế độ kiểm tra đầu vào. Phân tích rủi ro cần kết nối máy chủ.'
                       : '$summary\nChưa có kết quả đánh giá rủi ro.',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppTheme.mutedInk,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),

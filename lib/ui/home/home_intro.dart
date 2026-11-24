@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_theme.dart';
-
 class HomeIntro extends StatelessWidget {
   const HomeIntro({super.key});
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final colors = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Center(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: AppTheme.muted,
-              border: Border.all(color: AppTheme.border),
+              color: colors.secondaryContainer,
+              border: Border.all(color: colors.outlineVariant),
               borderRadius: BorderRadius.circular(24),
             ),
             child: const Padding(
@@ -44,7 +43,7 @@ class HomeIntro extends StatelessWidget {
           'Kiểm tra trước khi tin tưởng\nBảo vệ bạn khỏi lừa đảo số',
           textAlign: TextAlign.center,
           style: text.headlineMedium?.copyWith(
-            color: AppTheme.navy,
+            color: colors.primary,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.7,
             height: 1.19,
@@ -55,7 +54,7 @@ class HomeIntro extends StatelessWidget {
           'Kiểm tra tin nhắn SMS, liên kết website lạ hoặc số điện thoại khả nghi.',
           textAlign: TextAlign.center,
           style: text.bodyMedium?.copyWith(
-            color: AppTheme.mutedInk,
+            color: colors.onSurfaceVariant,
             height: 1.5,
           ),
         ),

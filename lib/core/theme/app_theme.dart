@@ -1,6 +1,22 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppTheme {
+  static final ThemeData dark = ThemeData(
+    colorScheme: const ColorScheme.dark(
+      primary: Color(0xFF9ACCFF),
+      onPrimary: Color(0xFF0B2545),
+      secondary: Color(0xFF89CEFF),
+      secondaryContainer: Color(0xFF253B58),
+      onSecondaryContainer: Color(0xFFE2EEFF),
+      surface: Color(0xFF171F30),
+      onSurface: Color(0xFFEAF1FF),
+      onSurfaceVariant: Color(0xFFAFBDD3),
+      outline: Color(0xFF465671),
+      outlineVariant: Color(0xFF35435A),
+    ),
+    scaffoldBackgroundColor: const Color(0xFF0F1523),
+  );
+
   static const navy = Color(0xFF0B132B);
   static const navyMid = Color(0xFF111C3D);
   static const navyLight = Color(0xFF1C2A4A);
@@ -30,7 +46,6 @@ abstract final class AppTheme {
       outlineVariant: border,
       error: error,
     ),
-    fontFamily: 'serif',
     scaffoldBackgroundColor: page,
     dividerColor: border,
     appBarTheme: const AppBarThemeData(
