@@ -173,7 +173,7 @@ class AuthApiService {
     if (setCookieHeader == null || setCookieHeader.isEmpty) {
       return null;
     }
-    final pattern = RegExp('(?:^|[,;\\s])${RegExp.escape(name)}=([^;]+)');
+    final pattern = RegExp('(?:^|[,;\\s])${RegExp.escape(name)}=([^;,]+)');
     final match = pattern.firstMatch(setCookieHeader);
     final value = match?.group(1)?.trim();
     return (value == null || value.isEmpty) ? null : value;

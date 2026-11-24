@@ -1,3 +1,4 @@
+import '../models/api_exception.dart';
 import '../models/auth_session.dart';
 import '../models/auth_user.dart';
 import '../services/auth_api_service.dart';
@@ -13,6 +14,9 @@ class AuthRepository {
 
   final AuthApiService _apiService;
   final SessionStorageService _storageService;
+
+  int _sessionEpoch = 0;
+  Future<void> _storageQueue = Future<void>.value();
 
   Future<AuthSession> login({
     required String identifier,
@@ -37,52 +41,75 @@ class AuthRepository {
       rememberMe: rememberMe,
     );
 
-    if (rememberMe) {
-      await _storageService.saveSession(session);
-      await _storageService.saveRememberedIdentifier(trimmedIdentifier);
-    } else {
-      await _storageService.clearSession();
-      await _storageService.saveRememberedIdentifier(null);
-    }
+    await _serializeStorage(() async {
+      _sessionEpoch++;
+      if (rememberMe) {
+        await _storageService.saveSession(session);
+        await _storageService.saveRememberedIdentifier(trimmedIdentifier);
+      } else {
+        await _storageService.clearSession();
+        await _storageService.saveRememberedIdentifier(null);
+      }
+    });
 
     return session;
   }
 
   Future<AuthSession?> restoreSession() async {
-    final saved = await _storageService.readSession();
-    if (saved == null) {
+    late int epoch;
+    AuthSession? saved;
+    await _serializeStorage(() async {
+      epoch = _sessionEpoch;
+      saved = await _storageService.readSession();
+    });
+    final candidate = saved;
+    if (candidate == null || epoch != _sessionEpoch) {
       return null;
     }
 
     try {
       final refreshedUser = await _apiService.getCurrentProfile(
-        accessToken: saved.accessToken,
+        accessToken: candidate.accessToken,
       );
-      final updated = saved.copyWith(user: refreshedUser);
-      await _storageService.saveSession(updated);
-      return updated;
-    } catch (_) {
-      final refreshToken = saved.refreshToken;
-      if (refreshToken == null || refreshToken.isEmpty) {
-        return saved;
+      final updated = candidate.copyWith(user: refreshedUser);
+      final persisted = await _saveSessionIfUnchanged(updated, epoch);
+      return persisted ? updated : null;
+    } catch (error) {
+      if (epoch != _sessionEpoch) {
+        return null;
       }
+      if (!_isAuthRejection(error)) {
+        // Transport/transient error: preserve saved session for offline use.
+        return candidate;
+      }
+
+      final refreshToken = candidate.refreshToken;
+      if (refreshToken == null || refreshToken.isEmpty) {
+        await _clearSessionIfUnchanged(epoch);
+        return null;
+      }
+
       try {
         final newTokens = await _apiService.refreshToken(
           refreshToken: refreshToken,
         );
         final refreshedUser = await _resolveUserProfile(
           accessToken: newTokens.accessToken,
-          fallbackIdentifier: saved.user.username,
+          fallbackIdentifier: candidate.user.username,
         );
-        final updated = saved.copyWith(
+        final updated = candidate.copyWith(
           accessToken: newTokens.accessToken,
           refreshToken: newTokens.refreshToken ?? refreshToken,
           user: refreshedUser,
         );
-        await _storageService.saveSession(updated);
-        return updated;
-      } catch (_) {
-        await _storageService.clearSession();
+        final persisted = await _saveSessionIfUnchanged(updated, epoch);
+        return persisted ? updated : null;
+      } catch (refreshError) {
+        if (_isAuthRejection(refreshError)) {
+          await _clearSessionIfUnchanged(epoch);
+        }
+        // On transport failures (statusCode == null) or transient server errors,
+        // keep the stored session intact so it can be restored once online.
         return null;
       }
     }
@@ -99,7 +126,10 @@ class AuthRepository {
         // Always clear local session even if the server cannot be reached.
       }
     }
-    await _storageService.clearSession();
+    await _serializeStorage(() async {
+      _sessionEpoch++;
+      await _storageService.clearSession();
+    });
   }
 
   Future<String?> loadRememberedIdentifier() {
@@ -125,5 +155,37 @@ class AuthRepository {
         role: 'REGISTERED_USER',
       );
     }
+  }
+
+  bool _isAuthRejection(Object error) {
+    return error is ApiException &&
+        (error.statusCode == 401 || error.statusCode == 403);
+  }
+
+  Future<bool> _saveSessionIfUnchanged(AuthSession session, int epoch) async {
+    var saved = false;
+    await _serializeStorage(() async {
+      if (epoch != _sessionEpoch) {
+        return;
+      }
+      await _storageService.saveSession(session);
+      saved = true;
+    });
+    return saved;
+  }
+
+  Future<void> _clearSessionIfUnchanged(int epoch) async {
+    await _serializeStorage(() async {
+      if (epoch != _sessionEpoch) {
+        return;
+      }
+      await _storageService.clearSession();
+    });
+  }
+
+  Future<void> _serializeStorage(Future<void> Function() action) {
+    final next = _storageQueue.then((_) => action());
+    _storageQueue = next.catchError((_) {});
+    return next;
   }
 }

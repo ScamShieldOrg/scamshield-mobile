@@ -14,54 +14,65 @@ class AuthState extends ChangeNotifier {
 
   AuthStatus _status = AuthStatus.initial;
   AuthSession? _session;
-  bool _isBusy = false;
+  bool _isInitializing = false;
+  bool _isSigningOut = false;
+  int _sessionGeneration = 0;
 
   AuthStatus get status => _status;
   AuthSession? get session => _session;
   AuthUser? get user => _session?.user;
   bool get isAuthenticated => _session != null;
-  bool get isBusy => _isBusy;
+  bool get isBusy => _isInitializing || _isSigningOut;
 
   Future<void> initialize() async {
-    if (_status != AuthStatus.initial) {
+    if (_status != AuthStatus.initial || _isInitializing) {
       return;
     }
-    _isBusy = true;
+    final generation = _sessionGeneration;
+    _isInitializing = true;
     notifyListeners();
     try {
       final restored = await _authRepository.restoreSession();
+      if (generation != _sessionGeneration) {
+        return;
+      }
       _session = restored;
       _status = restored != null
           ? AuthStatus.authenticated
           : AuthStatus.unauthenticated;
     } catch (_) {
+      if (generation != _sessionGeneration) {
+        return;
+      }
       _session = null;
       _status = AuthStatus.unauthenticated;
     } finally {
-      _isBusy = false;
+      _isInitializing = false;
       notifyListeners();
     }
   }
 
   void setAuthenticatedSession(AuthSession session) {
+    _sessionGeneration++;
     _session = session;
     _status = AuthStatus.authenticated;
     notifyListeners();
   }
 
   Future<void> signOut() async {
-    if (_isBusy) {
+    if (_isSigningOut) {
       return;
     }
     final current = _session;
-    _isBusy = true;
+    _sessionGeneration++;
+    _isSigningOut = true;
     notifyListeners();
     try {
       await _authRepository.logout(current);
     } finally {
       _session = null;
       _status = AuthStatus.unauthenticated;
-      _isBusy = false;
+      _isSigningOut = false;
       notifyListeners();
     }
   }
