@@ -230,6 +230,39 @@ class DisputeSummary {
   }
 }
 
+class DisputeSubmissionResult {
+  const DisputeSubmissionResult({
+    required this.id,
+    required this.disputeCode,
+    required this.status,
+    required this.message,
+  });
+
+  final int id;
+  final String disputeCode;
+  final DisputeRecordStatus status;
+  final String message;
+
+  String get displayCode =>
+      disputeCode.startsWith('#') ? disputeCode : '#$disputeCode';
+
+  factory DisputeSubmissionResult.fromJson(
+    Map<String, dynamic> data, {
+    required String message,
+  }) {
+    final id = _asInt(data['id']);
+    final rawCode = (data['disputeCode'] as String?)?.trim();
+    return DisputeSubmissionResult(
+      id: id,
+      disputeCode: (rawCode != null && rawCode.isNotEmpty)
+          ? rawCode
+          : 'DSP-$id',
+      status: DisputeRecordStatus.fromApi(data['status'] as String?),
+      message: message,
+    );
+  }
+}
+
 class DisputePageResult {
   const DisputePageResult({
     required this.items,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -18,6 +19,7 @@ import 'package:scamshield_mobile/data/services/dispute_api_service.dart';
 import 'package:scamshield_mobile/data/services/session_storage_service.dart';
 import 'package:scamshield_mobile/data/services/user_quota_api_service.dart';
 import 'package:scamshield_mobile/ui/dispute/dispute_tracking_screen.dart';
+import 'package:scamshield_mobile/ui/dispute/dispute_tracking_viewmodel.dart';
 
 Widget _wrapTrackingScreen({AuthUser? user, http.Client? disputeClient}) {
   final authRepository = AuthRepository(
@@ -262,6 +264,188 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Biểu Mẫu Khiếu Nại'), findsOneWidget);
+      },
+    );
+  });
+
+  group('DisputeTrackingViewModel state transitions', () {
+    test(
+      'selectFilter invalidates previous filter items/page and exposes error on failure',
+      () async {
+        final repository = DisputeRepository(
+          apiService: DisputeApiService(
+            baseUrl: 'http://localhost:8080/api',
+            client: MockClient((request) async {
+              if (request.url.path.endsWith('/disputes/me/summary')) {
+                return http.Response(
+                  jsonEncode({
+                    'isSuccess': true,
+                    'data': {
+                      'totalSubmitted': 2,
+                      'pending': 1,
+                      'inReview': 0,
+                      'needsMoreInfo': 0,
+                      'approved': 1,
+                      'rejected': 0,
+                    },
+                  }),
+                  200,
+                );
+              }
+              if (request.url.queryParameters['status'] == 'APPROVED') {
+                return http.Response(
+                  jsonEncode({'isSuccess': false, 'message': 'Lỗi máy chủ'}),
+                  500,
+                  headers: {'content-type': 'application/json; charset=utf-8'},
+                );
+              }
+              return http.Response(
+                jsonEncode({
+                  'isSuccess': true,
+                  'data': {
+                    'data': [
+                      {
+                        'id': 1,
+                        'disputeCode': 'DSP-1',
+                        'status': 'PENDING',
+                        'priority': 'NORMAL',
+                        'reason': 'test',
+                        'evidenceCount': 0,
+                        'attachments': const [],
+                      },
+                    ],
+                    'currentPage': 0,
+                    'totalItems': 2,
+                    'hasNext': true,
+                  },
+                }),
+                200,
+              );
+            }),
+          ),
+        );
+
+        final viewModel = DisputeTrackingViewModel(
+          disputeRepository: repository,
+        );
+        await viewModel.loadAll(accessToken: 'token');
+        expect(viewModel.items, hasLength(1));
+        expect(viewModel.hasNext, isTrue);
+
+        await viewModel.selectFilter(
+          filter: DisputeFilterTab.resolved,
+          accessToken: 'token',
+        );
+        expect(viewModel.items, isEmpty);
+        expect(viewModel.hasNext, isFalse);
+        expect(viewModel.errorMessage, 'Lỗi máy chủ');
+        viewModel.dispose();
+      },
+    );
+
+    test(
+      'loadAll and selectFilter reset _isLoadingMore while a pagination request is in flight',
+      () async {
+        final page1Gate = Completer<void>();
+        var page1Requests = 0;
+
+        final repository = DisputeRepository(
+          apiService: DisputeApiService(
+            baseUrl: 'http://localhost:8080/api',
+            client: MockClient((request) async {
+              if (request.url.path.endsWith('/disputes/me/summary')) {
+                return http.Response(
+                  jsonEncode({
+                    'isSuccess': true,
+                    'data': {
+                      'totalSubmitted': 2,
+                      'pending': 2,
+                      'inReview': 0,
+                      'needsMoreInfo': 0,
+                      'approved': 0,
+                      'rejected': 0,
+                    },
+                  }),
+                  200,
+                );
+              }
+              final page = request.url.queryParameters['page'];
+              if (page == '1') {
+                page1Requests++;
+                if (page1Requests == 1) {
+                  await page1Gate.future;
+                }
+                return http.Response(
+                  jsonEncode({
+                    'isSuccess': true,
+                    'data': {
+                      'data': [
+                        {
+                          'id': 2,
+                          'disputeCode': 'DSP-2',
+                          'status': 'PENDING',
+                          'priority': 'NORMAL',
+                          'reason': 'page 1',
+                          'evidenceCount': 0,
+                          'attachments': const [],
+                        },
+                      ],
+                      'currentPage': 1,
+                      'totalItems': 2,
+                      'hasNext': false,
+                    },
+                  }),
+                  200,
+                );
+              }
+              return http.Response(
+                jsonEncode({
+                  'isSuccess': true,
+                  'data': {
+                    'data': [
+                      {
+                        'id': 1,
+                        'disputeCode': 'DSP-1',
+                        'status': 'PENDING',
+                        'priority': 'NORMAL',
+                        'reason': 'page 0',
+                        'evidenceCount': 0,
+                        'attachments': const [],
+                      },
+                    ],
+                    'currentPage': 0,
+                    'totalItems': 2,
+                    'hasNext': true,
+                  },
+                }),
+                200,
+              );
+            }),
+          ),
+        );
+
+        final viewModel = DisputeTrackingViewModel(
+          disputeRepository: repository,
+        );
+        await viewModel.loadAll(accessToken: 'token');
+
+        final staleLoadMore = viewModel.loadMore(accessToken: 'token');
+        expect(viewModel.isLoadingMore, isTrue);
+
+        await viewModel.selectFilter(
+          filter: DisputeFilterTab.inProgress,
+          accessToken: 'token',
+        );
+        expect(viewModel.isLoadingMore, isFalse);
+
+        // Stale loadMore finishing should not break subsequent pagination.
+        page1Gate.complete();
+        await staleLoadMore;
+
+        await viewModel.loadMore(accessToken: 'token');
+        expect(viewModel.items, hasLength(2));
+        expect(viewModel.isLoadingMore, isFalse);
+        viewModel.dispose();
       },
     );
   });

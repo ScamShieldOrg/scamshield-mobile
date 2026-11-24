@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../../core/config/api_config.dart';
+import '../../ui/dispute/submit_dispute_validation.dart';
 import '../models/api_exception.dart';
 import '../models/dispute_models.dart';
 
@@ -18,6 +20,107 @@ class DisputeApiService {
   final http.Client _client;
   final String? _baseUrl;
   final Duration timeout;
+
+  Future<DisputeSubmissionResult> submitDispute({
+    required String accessToken,
+    required DisputeIndicatorType indicatorType,
+    required String indicatorValue,
+    required DisputeLegalRelationship legalRelationship,
+    required String reason,
+    required bool agreeTerms,
+    required List<DisputeAttachmentItem> attachments,
+  }) async {
+    final uri = ApiConfig.resolve('/disputes', baseUrlOverride: _baseUrl);
+    final request = http.MultipartRequest('POST', uri)
+      ..headers['Accept'] = 'application/json'
+      ..headers['Authorization'] = 'Bearer $accessToken';
+
+    final payload = jsonEncode({
+      'indicatorType': indicatorType.apiValue,
+      'indicatorValue': indicatorValue.trim(),
+      'legalRelationship': legalRelationship.apiValue,
+      'reason': reason.trim(),
+      'agreeTerms': agreeTerms,
+    });
+    request.files.add(
+      http.MultipartFile.fromString(
+        'request',
+        payload,
+        contentType: MediaType('application', 'json'),
+      ),
+    );
+
+    for (final attachment in attachments) {
+      final mediaType = MediaType.parse(attachment.contentType);
+      if (attachment.bytes != null && attachment.bytes!.isNotEmpty) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'files',
+            attachment.bytes!,
+            filename: attachment.fileName,
+            contentType: mediaType,
+          ),
+        );
+      } else if (attachment.filePath != null &&
+          attachment.filePath!.isNotEmpty) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'files',
+            attachment.filePath!,
+            filename: attachment.fileName,
+            contentType: mediaType,
+          ),
+        );
+      } else {
+        throw ApiException(
+          'Không thể đọc tệp "${attachment.fileName}". Vui lòng chọn lại.',
+        );
+      }
+    }
+
+    final http.Response response;
+    try {
+      final streamed = await _client.send(request).timeout(timeout);
+      response = await http.Response.fromStream(streamed).timeout(timeout);
+    } on TimeoutException {
+      throw const ApiException(
+        'Máy chủ phản hồi quá lâu. Vui lòng kiểm tra kết nối và thử lại.',
+      );
+    } on ApiException {
+      rethrow;
+    } catch (_) {
+      throw const ApiException(
+        'Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng và thử lại.',
+      );
+    }
+
+    final body = _decodeJsonMap(response.bodyBytes);
+    final isAccepted =
+        response.statusCode >= 200 &&
+        response.statusCode < 300 &&
+        body?['isSuccess'] == true;
+    if (!isAccepted) {
+      throw ApiException(
+        _errorMessage(
+          body,
+          fallback: 'Không thể gửi hồ sơ khiếu nại. Vui lòng thử lại.',
+        ),
+        statusCode: response.statusCode,
+      );
+    }
+
+    final data = body?['data'];
+    if (data is! Map<String, dynamic>) {
+      throw const ApiException('Phản hồi xác nhận hồ sơ không hợp lệ.');
+    }
+    final serverMessage = (body?['message'] as String?)?.trim();
+    return DisputeSubmissionResult.fromJson(
+      data,
+      message: (serverMessage != null && serverMessage.isNotEmpty)
+          ? serverMessage
+          : 'Hồ sơ khiếu nại đã được gửi và đang chờ thẩm định.',
+    );
+  }
 
   Future<DisputePageResult> getMyDisputes({
     required String accessToken,
@@ -116,6 +219,14 @@ class DisputeApiService {
     Map<String, dynamic>? body, {
     required String fallback,
   }) {
+    final data = body?['data'];
+    if (data is Map<String, dynamic>) {
+      for (final value in data.values) {
+        if (value is String && value.trim().isNotEmpty) {
+          return value.trim();
+        }
+      }
+    }
     final message = (body?['message'] as String?)?.trim();
     return (message != null && message.isNotEmpty) ? message : fallback;
   }

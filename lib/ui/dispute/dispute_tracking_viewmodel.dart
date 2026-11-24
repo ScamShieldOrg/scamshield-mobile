@@ -31,6 +31,7 @@ class DisputeTrackingViewModel extends ChangeNotifier {
 
   Future<void> loadAll({required String accessToken}) async {
     final generation = ++_requestGeneration;
+    _isLoadingMore = false;
     _isLoading = true;
     _errorMessage = null;
     _safeNotify();
@@ -80,6 +81,10 @@ class DisputeTrackingViewModel extends ChangeNotifier {
     }
     _activeFilter = filter;
     final generation = ++_requestGeneration;
+    _items = const [];
+    _currentPage = 0;
+    _hasNext = false;
+    _isLoadingMore = false;
     _isLoading = true;
     _errorMessage = null;
     _safeNotify();

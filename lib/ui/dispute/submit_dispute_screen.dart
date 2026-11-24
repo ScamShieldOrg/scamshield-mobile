@@ -1,11 +1,13 @@
 import 'dart:ui' as ui;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/auth_state.dart';
 import '../../app/user_quota_state.dart';
 import '../../core/theme/app_theme.dart';
+import '../../data/models/api_exception.dart';
 import '../../data/repositories/dispute_repository.dart';
 import '../auth/login_screen.dart';
 import '../shared/ai_quota_banner.dart';
@@ -15,8 +17,13 @@ import '../shared/user_sidebar_drawer.dart';
 import 'dispute_tracking_screen.dart';
 import 'submit_dispute_validation.dart';
 
+typedef DisputeAttachmentPicker = Future<List<PickedDisputeFile>?> Function();
+
 class SubmitDisputeScreen extends StatefulWidget {
-  const SubmitDisputeScreen({super.key});
+  const SubmitDisputeScreen({super.key, this.attachmentPicker});
+
+  /// Optional override for selecting PDF/image attachments (defaults to [FilePicker]).
+  final DisputeAttachmentPicker? attachmentPicker;
 
   @override
   State<SubmitDisputeScreen> createState() => _SubmitDisputeScreenState();
@@ -33,6 +40,7 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
   final _reasonController = TextEditingController();
 
   bool _isLightMode = true;
+  bool _isSubmitting = false;
   int? _submittedDisputeCount;
   DisputeIndicatorType _indicatorType = DisputeIndicatorType.phone;
   DisputeLegalRelationship _legalRelationship =
@@ -41,7 +49,8 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
   AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
   String? _attachmentsError;
   String? _agreementError;
-  int _sampleAttachmentCounter = 0;
+  String? _submitError;
+  int _attachmentSequence = 0;
 
   final List<DisputeAttachmentItem> _attachments = [];
 
@@ -147,7 +156,31 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
     _showNotice('Tính năng "$label" trên di động đang được phát triển.');
   }
 
-  void _openAttachmentPicker() {
+  Future<List<PickedDisputeFile>?> _defaultPickFiles() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: allowedDisputeFileExtensions.toList(growable: false),
+      allowMultiple: true,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return null;
+    }
+    return [
+      for (final file in result.files)
+        PickedDisputeFile(
+          fileName: file.name,
+          sizeBytes: file.size,
+          bytes: file.bytes,
+          filePath: file.path,
+        ),
+    ];
+  }
+
+  Future<void> _openAttachmentPicker() async {
+    if (_isSubmitting) {
+      return;
+    }
     if (_attachments.length >= maxDisputeAttachmentCount) {
       _showNotice(
         'Mỗi hồ sơ chỉ được đính kèm tối đa $maxDisputeAttachmentCount tệp.',
@@ -155,129 +188,64 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
       return;
     }
 
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppTheme.border,
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  'Thêm tài liệu xác minh chính chủ',
-                  style: TextStyle(
-                    fontFamily: 'sans-serif',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.ink,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Hỗ trợ tệp PDF, JPG, PNG (chế độ xem trước giao diện).',
-                  style: TextStyle(
-                    fontFamily: 'sans-serif',
-                    fontSize: 12.5,
-                    color: AppTheme.mutedInk,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ListTile(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  leading: const Icon(
-                    Icons.picture_as_pdf_outlined,
-                    color: _activeBlue,
-                  ),
-                  title: const Text(
-                    'Chọn tệp PDF (ĐKKD / Hợp đồng)',
-                    style: TextStyle(
-                      fontFamily: 'sans-serif',
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _addAttachment(
-                      prefix: 'GiayPhepKinhDoanh',
-                      extension: 'pdf',
-                      sizeLabel: '1.8 MB',
-                      note: 'Tài liệu PDF xác minh',
-                    );
-                  },
-                ),
-                ListTile(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  leading: const Icon(
-                    Icons.photo_camera_outlined,
-                    color: _activeBlue,
-                  ),
-                  title: const Text(
-                    'Chụp ảnh hoặc chọn ảnh (CCCD che số)',
-                    style: TextStyle(
-                      fontFamily: 'sans-serif',
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _addAttachment(
-                      prefix: 'XacMinhChinhChu',
-                      extension: 'jpg',
-                      sizeLabel: '920 KB',
-                      note: 'Ảnh chụp xác minh',
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+    List<PickedDisputeFile>? picked;
+    try {
+      final picker = widget.attachmentPicker ?? _defaultPickFiles;
+      picked = await picker();
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showNotice('Không thể mở trình chọn tệp. Vui lòng thử lại.');
+      return;
+    }
 
-  void _addAttachment({
-    required String prefix,
-    required String extension,
-    required String sizeLabel,
-    required String note,
-  }) {
-    setState(() {
-      _sampleAttachmentCounter += 1;
-      _attachments.add(
-        DisputeAttachmentItem(
-          id: 'added_$_sampleAttachmentCounter',
-          fileName: '${prefix}_$_sampleAttachmentCounter.$extension',
-          sizeLabel: sizeLabel,
-          note: note,
-        ),
+    if (!mounted || picked == null || picked.isEmpty) {
+      return;
+    }
+
+    final validItems = <DisputeAttachmentItem>[];
+    String? firstError;
+    final remainingSlots = maxDisputeAttachmentCount - _attachments.length;
+
+    for (final file in picked) {
+      if (validItems.length >= remainingSlots) {
+        firstError ??=
+            'Mỗi hồ sơ chỉ được đính kèm tối đa $maxDisputeAttachmentCount tệp.';
+        break;
+      }
+      final validated = validateAndBuildDisputeAttachment(
+        id: 'att_${++_attachmentSequence}',
+        file: file,
       );
-      _attachmentsError = null;
-    });
+      if (validated.item != null) {
+        validItems.add(validated.item!);
+      } else {
+        firstError ??= validated.error;
+      }
+    }
+
+    if (validItems.isNotEmpty) {
+      setState(() {
+        _attachments.addAll(validItems);
+        _attachmentsError = firstError;
+        _submitError = null;
+      });
+    } else if (firstError != null) {
+      setState(() {
+        _attachmentsError = firstError;
+      });
+    }
+
+    if (firstError != null) {
+      _showNotice(firstError);
+    }
   }
 
   void _removeAttachment(String id) {
+    if (_isSubmitting) {
+      return;
+    }
     setState(() {
       _attachments.removeWhere((item) => item.id == id);
       if (_autovalidateMode != AutovalidateMode.disabled) {
@@ -286,7 +254,11 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
     });
   }
 
-  void _handleSubmit() {
+  Future<void> _handleSubmit() async {
+    if (_isSubmitting) {
+      return;
+    }
+
     final formValid = _formKey.currentState?.validate() ?? false;
     final attachmentsErr = validateDisputeAttachments(_attachments);
     final agreementErr = validateDisputeAgreement(_agreedToTerms);
@@ -295,6 +267,7 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
       _autovalidateMode = AutovalidateMode.onUserInteraction;
       _attachmentsError = attachmentsErr;
       _agreementError = agreementErr;
+      _submitError = null;
     });
 
     if (!formValid || attachmentsErr != null || agreementErr != null) {
@@ -302,10 +275,70 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
       return;
     }
 
+    final authState = context.read<AuthState?>();
+    final accessToken = authState?.session?.accessToken;
+    if (accessToken == null || accessToken.isEmpty) {
+      _showNotice('Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.');
+      return;
+    }
+
     FocusScope.of(context).unfocus();
-    _showNotice(
-      'Biểu mẫu hợp lệ. Gửi hồ sơ khiếu nại cần kết nối API máy chủ.',
-    );
+    setState(() {
+      _isSubmitting = true;
+      _submitError = null;
+    });
+
+    try {
+      final repository =
+          context.read<DisputeRepository?>() ?? DisputeRepository();
+      final result = await repository.submitDispute(
+        accessToken: accessToken,
+        indicatorType: _indicatorType,
+        indicatorValue: _indicatorController.text,
+        legalRelationship: _legalRelationship,
+        reason: _reasonController.text,
+        agreeTerms: _agreedToTerms,
+        attachments: List<DisputeAttachmentItem>.unmodifiable(_attachments),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isSubmitting = false;
+        _submitError = null;
+        _autovalidateMode = AutovalidateMode.disabled;
+        _indicatorController.clear();
+        _reasonController.clear();
+        _attachments.clear();
+        _agreedToTerms = false;
+        _attachmentsError = null;
+        _agreementError = null;
+        _submittedDisputeCount = (_submittedDisputeCount ?? 0) + 1;
+      });
+      _formKey.currentState?.reset();
+      _showNotice('${result.message} (${result.displayCode})');
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isSubmitting = false;
+        _submitError = error.message;
+      });
+      _showNotice(error.message);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      const message = 'Không thể gửi hồ sơ khiếu nại. Vui lòng thử lại.';
+      setState(() {
+        _isSubmitting = false;
+        _submitError = message;
+      });
+      _showNotice(message);
+    }
   }
 
   void _handleSaveDraft() {
@@ -886,7 +919,7 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
                           ),
                           const SizedBox(height: 4),
                           const Text(
-                            '(ĐKKD, Hợp đồng mạng viễn thông, CCCD che số, ≤15MB)',
+                            '(ĐKKD, Hợp đồng mạng viễn thông, CCCD che số • PDF/JPG/PNG ≤5MB)',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontFamily: 'sans-serif',
@@ -1049,26 +1082,80 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
                   ),
                 ),
               ],
+              if (_submitError != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  key: const ValueKey('dispute_submit_error_banner'),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.errorSurface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.errorBorder),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 1),
+                        child: Icon(
+                          Icons.error_outline,
+                          size: 18,
+                          color: AppTheme.error,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _submitError!,
+                          style: const TextStyle(
+                            fontFamily: 'sans-serif',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.error,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 18),
               FilledButton.icon(
                 key: const ValueKey('dispute_submit_button'),
-                onPressed: _handleSubmit,
+                onPressed: _isSubmitting ? null : _handleSubmit,
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(52),
                   backgroundColor: AppTheme.navy,
                   foregroundColor: Colors.white,
+                  disabledBackgroundColor: AppTheme.navy.withValues(
+                    alpha: 0.72,
+                  ),
+                  disabledForegroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                icon: const Icon(
-                  Icons.rocket_launch_outlined,
-                  size: 18,
-                  color: AppTheme.shieldBlue,
-                ),
-                label: const Text(
-                  'Gửi Đơn Khiếu Nại Thẩm Định',
-                  style: TextStyle(
+                icon: _isSubmitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.rocket_launch_outlined,
+                        size: 18,
+                        color: AppTheme.shieldBlue,
+                      ),
+                label: Text(
+                  _isSubmitting
+                      ? 'Đang gửi hồ sơ...'
+                      : 'Gửi Đơn Khiếu Nại Thẩm Định',
+                  style: const TextStyle(
                     fontFamily: 'sans-serif',
                     fontSize: 14.5,
                     fontWeight: FontWeight.w700,
@@ -1078,7 +1165,7 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
               const SizedBox(height: 10),
               OutlinedButton.icon(
                 key: const ValueKey('dispute_draft_button'),
-                onPressed: _handleSaveDraft,
+                onPressed: _isSubmitting ? null : _handleSaveDraft,
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(48),
                   backgroundColor: Colors.white,
