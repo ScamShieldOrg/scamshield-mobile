@@ -39,10 +39,11 @@ class ReportForm extends StatefulWidget {
   const ReportForm({super.key});
 
   @override
-  State<ReportForm> createState() => _ReportFormState();
+  ReportFormState createState() => ReportFormState();
 }
 
-class _ReportFormState extends State<ReportForm> {
+class ReportFormState extends State<ReportForm>
+    with AutomaticKeepAliveClientMixin<ReportForm> {
   final _service = ReportService();
   final _identifier = TextEditingController();
   final _identifierFocus = FocusNode();
@@ -61,6 +62,18 @@ class _ReportFormState extends State<ReportForm> {
   bool _busy = false;
   _ReportTarget? _target;
   bool _confirmed = false;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  bool get hasDraft =>
+      _identifier.text.isNotEmpty ||
+      _description.text.isNotEmpty ||
+      _files.isNotEmpty ||
+      _target != null ||
+      _region != null ||
+      _category != null ||
+      _confirmed;
 
   @override
   void initState() {
@@ -426,6 +439,7 @@ class _ReportFormState extends State<ReportForm> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final colors = Theme.of(context).colorScheme;
     final fieldFill = colors.brightness == Brightness.dark
         ? colors.surfaceContainerHigh

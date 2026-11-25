@@ -7,24 +7,57 @@ import '../shared/scamshield_header.dart';
 import '../shared/scamshield_navigation.dart';
 import 'report_form.dart';
 
-class ReportScreen extends StatelessWidget {
+class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key, this.onSignOut, this.onLightModeChanged});
 
   final VoidCallback? onSignOut;
   final ValueChanged<bool>? onLightModeChanged;
 
   @override
+  State<ReportScreen> createState() => _ReportScreenState();
+}
+
+class _ReportScreenState extends State<ReportScreen> {
+  final _formKey = GlobalKey<ReportFormState>();
+
+  Future<bool> _confirmTabChange() async {
+    if (_formKey.currentState?.hasDraft != true) return true;
+
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Bỏ báo cáo đang soạn?'),
+            content: const Text(
+              'Nội dung đã nhập và tệp đính kèm sẽ bị mất khi chuyển mục.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Ở lại'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Bỏ báo cáo'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const ScamShieldHeader(),
       endDrawer: GuestMenu(
-        onSignOut: onSignOut,
-        onLightModeChanged: onLightModeChanged,
+        onSignOut: widget.onSignOut,
+        onLightModeChanged: widget.onLightModeChanged,
       ),
       bottomNavigationBar: ScamShieldNavigation(
         selected: ScamShieldTab.report,
-        onSignOut: onSignOut,
-        onLightModeChanged: onLightModeChanged,
+        onSignOut: widget.onSignOut,
+        onLightModeChanged: widget.onLightModeChanged,
+        confirmTabChange: _confirmTabChange,
       ),
       body: SafeArea(
         child: Align(
@@ -56,7 +89,7 @@ class ReportScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 18),
-                const ReportForm(),
+                ReportForm(key: _formKey),
               ],
             ),
           ),

@@ -12,24 +12,29 @@ class ScamShieldNavigation extends StatelessWidget {
     required this.selected,
     this.onSignOut,
     this.onLightModeChanged,
+    this.confirmTabChange,
   });
 
   final ScamShieldTab selected;
   final VoidCallback? onSignOut;
   final ValueChanged<bool>? onLightModeChanged;
+  final Future<bool> Function()? confirmTabChange;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final navigation = NavigationBar(
       selectedIndex: selected.index,
-      onDestinationSelected: (index) {
+      onDestinationSelected: (index) async {
         final tab = ScamShieldTab.values[index];
         if (tab == ScamShieldTab.menu) {
           Scaffold.of(context).openEndDrawer();
           return;
         }
         if (tab == selected) return;
+
+        final confirm = confirmTabChange;
+        if (confirm != null && (!await confirm() || !context.mounted)) return;
 
         final navigator = Navigator.of(context);
         if (tab == ScamShieldTab.check) {
