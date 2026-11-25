@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'scamshield_header.dart';
-import 'scamshield_navigation.dart';
+import '../../core/theme/app_theme.dart';
+import '../../data/models/auth_user.dart';
+import 'scam_shield_brand_badge.dart';
 
 enum _GuestDestination {
   history('Lịch Sử Kiểm Tra', Icons.history),
@@ -15,7 +16,18 @@ enum _GuestDestination {
 }
 
 class GuestMenu extends StatelessWidget {
-  const GuestMenu({super.key, this.onSignOut, this.onLightModeChanged});
+  const GuestMenu({
+    super.key,
+    this.user,
+    this.onLogin,
+    this.onSignOut,
+  });
+
+  /// Supplied when an authenticated session is active.
+  final AuthUser? user;
+
+  /// Invoked when the user chooses to sign in from the drawer.
+  final VoidCallback? onLogin;
 
   /// Supplied only while an authenticated session is active.
   final VoidCallback? onSignOut;
@@ -23,8 +35,11 @@ class GuestMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final isLight = colors.brightness == Brightness.light;
+    final currentUser = user;
+    final secondaryIdentity = currentUser?.email?.isNotEmpty == true
+        ? currentUser!.email!
+        : currentUser?.phoneNumber;
+
     return Drawer(
       width: 292,
       shape: const RoundedRectangleBorder(
@@ -36,19 +51,21 @@ class GuestMenu extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
           children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF0B132B), Color(0xFF194984)],
-                ),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: ListTile(
-                contentPadding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-                leading: const _MenuIcon(
-                  icon: Icons.verified_user_outlined,
-                  background: Color(0x263BAEFF),
-                  foreground: Color(0xFF89CEFF),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: ScamShieldBrandBadge(),
+            ),
+            const SizedBox(height: 8),
+            const Divider(),
+            for (final destination in _GuestDestination.values)
+              ListTile(
+                leading: Icon(destination.icon),
+                title: Text(destination.title),
+                selected: destination == _GuestDestination.check,
+                selectedColor: Colors.white,
+                selectedTileColor: AppTheme.navy,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 title: const Text(
                   'ScamShield',
@@ -130,7 +147,62 @@ class GuestMenu extends StatelessWidget {
                 onChanged: onLightModeChanged,
               ),
             ),
-            const SizedBox(height: 14),
+            if (currentUser != null) ...[
+              Container(
+                margin: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.page,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      currentUser.displayName,
+                      style: const TextStyle(
+                        fontFamily: 'sans-serif',
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.ink,
+                      ),
+                    ),
+                    if (secondaryIdentity != null &&
+                        secondaryIdentity != currentUser.displayName) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        secondaryIdentity,
+                        style: const TextStyle(
+                          fontFamily: 'sans-serif',
+                          fontSize: 12.5,
+                          color: AppTheme.mutedInk,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.muted,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        currentUser.roleLabel,
+                        style: const TextStyle(
+                          fontFamily: 'sans-serif',
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.navy,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (onSignOut case final signOut?)
               ListTile(
                 textColor: colors.error,
@@ -143,17 +215,25 @@ class GuestMenu extends StatelessWidget {
                 },
               )
             else ...[
-              FilledButton.icon(
-                icon: const Icon(Icons.login, size: 18),
-                label: const Text('Đăng nhập'),
-                onPressed: () => _openAccountInfo(context, 'Đăng nhập'),
+              ListTile(
+                leading: const Icon(Icons.login),
+                title: const Text('Đăng nhập'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  if (onLogin != null) {
+                    onLogin!();
+                  } else {
+                    _openAccountInfo(context, 'Đăng nhập');
+                  }
+                },
               ),
-              const SizedBox(height: 6),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.person_add_alt_outlined, size: 18),
-                label: const Text('Tạo tài khoản miễn phí'),
-                onPressed: () =>
-                    _openAccountInfo(context, 'Tạo tài khoản miễn phí'),
+              ListTile(
+                leading: const Icon(Icons.person_add_alt_outlined),
+                title: const Text('Tạo tài khoản miễn phí'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _openAccountInfo(context, 'Tạo tài khoản miễn phí');
+                },
               ),
             ],
           ],
@@ -163,28 +243,16 @@ class GuestMenu extends StatelessWidget {
   }
 
   void _openAccountInfo(BuildContext context, String title) {
-    _openSection(context, title, const [
-      (
-        'Chưa kết nối tài khoản',
-        'Ứng dụng di động chưa kết nối dịch vụ tài khoản. Bạn vẫn có thể sử dụng chế độ khách.',
-      ),
-    ]);
-  }
-
-  void _openSection(
-    BuildContext context,
-    String title,
-    List<(String, String)> cards,
-  ) {
-    final navigator = Navigator.of(context);
-    navigator.pop();
-    navigator.push<void>(
+    Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => _SectionPage(
           title: title,
-          cards: cards,
-          onSignOut: onSignOut,
-          onLightModeChanged: onLightModeChanged,
+          cards: const [
+            (
+              'Tính năng đang phát triển',
+              'Màn hình tạo tài khoản trên di động đang được hoàn thiện. Bạn có thể đăng nhập bằng tài khoản đã có hoặc dùng chế độ khách.',
+            ),
+          ],
         ),
       ),
     );

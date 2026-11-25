@@ -18,6 +18,8 @@ abstract final class AppTheme {
   );
 
   static const navy = Color(0xFF0B132B);
+  static const navyMid = Color(0xFF111C3D);
+  static const navyLight = Color(0xFF1C2A4A);
   static const ink = Color(0xFF131B2E);
   static const blue = Color(0xFF008CC7);
   static const shieldBlue = Color(0xFF89CEFF);
@@ -25,6 +27,10 @@ abstract final class AppTheme {
   static const muted = Color(0xFFEEF1F6);
   static const mutedInk = Color(0xFF565E6B);
   static const border = Color(0xFFE2E8F0);
+  static const error = Color(0xFFBA1A1A);
+  static const errorSurface = Color(0xFFFEF2F2);
+  static const errorBorder = Color(0xFFFECACA);
+  static const accentAmber = Color(0xFFF59E0B);
 
   static final ThemeData light = ThemeData(
     colorScheme: const ColorScheme.light(
@@ -38,7 +44,7 @@ abstract final class AppTheme {
       onSurfaceVariant: mutedInk,
       outline: border,
       outlineVariant: border,
-      error: Color(0xFFDC2626),
+      error: error,
     ),
     scaffoldBackgroundColor: page,
     dividerColor: border,

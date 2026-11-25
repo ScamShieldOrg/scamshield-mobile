@@ -27,25 +27,6 @@ class ReportService {
     return data;
   }
 
-  Future<String> signIn(String identifier, String password) async {
-    final response = await http
-        .post(
-          ApiConfig.endpoint('/auth/login'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'usernameOrPhoneNumber': identifier,
-            'password': password,
-          }),
-        )
-        .timeout(const Duration(seconds: 20));
-    final body = _body(response);
-    final token = body['data']?['accessToken'] ?? body['accessToken'];
-    if (token is! String || token.isEmpty) {
-      throw const FormatException('Máy chủ chưa cấp phiên đăng nhập.');
-    }
-    return token;
-  }
-
   Future<List<ReportOption>> categories(String token) async {
     final response = await http
         .get(
@@ -112,7 +93,9 @@ class ReportService {
           .timeout(const Duration(minutes: 2));
       final body = _body(response);
       final data = body['data'];
-      if (body['isSuccess'] != true || data is! Map || data['id'] is! num) {
+      if ((body['isSuccess'] ?? body['success']) != true ||
+          data is! Map ||
+          data['id'] is! num) {
         throw const FormatException('Chưa nhận được xác nhận lưu báo cáo.');
       }
       return data['reportCode']?.toString() ?? '#RPT-${data['id']}';
