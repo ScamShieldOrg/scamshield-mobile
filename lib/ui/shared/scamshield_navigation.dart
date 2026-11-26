@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../app/auth_state.dart';
+import '../auth/login_screen.dart';
 import '../report/report_screen.dart';
 import 'guest_menu.dart';
 import 'scamshield_header.dart';
@@ -41,9 +44,24 @@ class ScamShieldNavigation extends StatelessWidget {
           navigator.popUntil((route) => route.isFirst);
           return;
         }
+        String? reportToken;
+        if (tab == ScamShieldTab.report) {
+          reportToken = context.read<AuthState?>()?.session?.accessToken;
+          if (reportToken == null || reportToken.isEmpty) {
+            final proceed = await showReportLoginPrompt(context);
+            if (proceed != true || !context.mounted) return;
+            final loggedIn = await navigator.push<bool>(
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+            );
+            if (loggedIn != true || !context.mounted) return;
+            reportToken = context.read<AuthState?>()?.session?.accessToken;
+            if (reportToken == null || reportToken.isEmpty) return;
+          }
+        }
         final route = MaterialPageRoute<void>(
-          builder: (_) => tab == ScamShieldTab.report
+          builder: (_) => reportToken != null
               ? ReportScreen(
+                  accessToken: reportToken,
                   onSignOut: onSignOut,
                   onLightModeChanged: onLightModeChanged,
                 )
@@ -113,10 +131,7 @@ class _TabPage extends StatelessWidget {
         : 'Huy Hiệu & Đổi Thưởng';
     return Scaffold(
       appBar: const ScamShieldHeader(),
-      endDrawer: GuestMenu(
-        onSignOut: onSignOut,
-        onLightModeChanged: onLightModeChanged,
-      ),
+      endDrawer: GuestMenu(onSignOut: onSignOut),
       bottomNavigationBar: ScamShieldNavigation(
         selected: tab,
         onSignOut: onSignOut,

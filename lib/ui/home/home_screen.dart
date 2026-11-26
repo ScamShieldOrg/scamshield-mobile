@@ -5,6 +5,7 @@ import '../../app/auth_state.dart';
 import '../../core/theme/app_theme.dart';
 import '../auth/login_screen.dart';
 import '../dispute/submit_dispute_screen.dart';
+import '../report/report_screen.dart';
 import '../shared/guest_menu.dart';
 import '../shared/scam_shield_brand_badge.dart';
 import '../shared/user_app_bar.dart';
@@ -21,14 +22,22 @@ class HomeScreen extends StatelessWidget {
   final ValueChanged<bool>? onLightModeChanged;
 
   void _openLogin(BuildContext context) {
-    Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
   void _openSubmitDispute(BuildContext context) {
     Navigator.of(context).push<void>(
       MaterialPageRoute(builder: (_) => const SubmitDisputeScreen()),
+    );
+  }
+
+  void _openReport(BuildContext context) {
+    final token = context.read<AuthState?>()?.session?.accessToken;
+    if (token == null || token.isEmpty) return;
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => ReportScreen(accessToken: token)),
     );
   }
 
@@ -75,6 +84,8 @@ class HomeScreen extends StatelessWidget {
               onSelectDestination: (destination) {
                 if (destination == UserSidebarDestination.dispute) {
                   _openSubmitDispute(context);
+                } else if (destination == UserSidebarDestination.submitReport) {
+                  _openReport(context);
                 } else if (destination != UserSidebarDestination.scamCheck) {
                   _showComingSoon(context, destination.title);
                 }
@@ -256,6 +267,10 @@ class HomeScreen extends StatelessWidget {
               hasNewsDot: true,
               onSelectTab: (tab) {
                 if (tab == UserBottomNavTab.check) {
+                  return;
+                }
+                if (tab == UserBottomNavTab.report) {
+                  _openReport(context);
                   return;
                 }
                 final label = switch (tab) {

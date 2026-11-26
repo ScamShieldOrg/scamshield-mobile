@@ -36,9 +36,9 @@ enum _ReportTarget {
 }
 
 class ReportForm extends StatefulWidget {
-  const ReportForm({super.key, this.accessToken});
+  const ReportForm({super.key, required this.accessToken});
 
-  final String? accessToken;
+  final String accessToken;
 
   @override
   ReportFormState createState() => ReportFormState();
@@ -104,9 +104,8 @@ class ReportFormState extends State<ReportForm>
       _category = null;
       _categories = const [];
       _categoriesError = null;
-      _loadingCategories = token != null;
+      _loadingCategories = true;
     });
-    if (token == null) return;
 
     try {
       final categories = await _service.categories(token);
@@ -324,54 +323,6 @@ class ReportFormState extends State<ReportForm>
     if (mounted && selected != null) setState(() => _region = selected);
   }
 
-  Future<void> _showLoginRequired() => showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      scrollable: true,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      icon: Center(
-        child: CircleAvatar(
-          radius: 26,
-          backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-          foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
-          child: const Icon(Icons.verified_user_outlined),
-        ),
-      ),
-      title: const Text(
-        'Cần đăng nhập',
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Vui lòng đăng nhập để gửi báo cáo.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.login_rounded, size: 18),
-            label: const Text(
-              'Đến trang đăng nhập',
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(height: 4),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Hủy'),
-          ),
-        ],
-      ),
-    ),
-  );
-
   Future<void> _pickEvidence() => _run(() async {
     final file = await const MethodChannel(
       'scamshield/report_evidence',
@@ -396,7 +347,6 @@ class ReportFormState extends State<ReportForm>
     final identifier = _identifier.text.trim();
     final description = _description.text.trim();
     if (!_validateIdentifierBeforeSubmit()) return;
-    if (token == null) return;
     if (target == null ||
         region == null ||
         category == null ||
@@ -471,11 +421,7 @@ class ReportFormState extends State<ReportForm>
       _guideToTarget();
       return;
     }
-    if (widget.accessToken != null) {
-      _submit();
-    } else if (_validateIdentifierBeforeSubmit()) {
-      _showLoginRequired();
-    }
+    _submit();
   }
 
   @override

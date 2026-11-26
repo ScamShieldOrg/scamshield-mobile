@@ -157,7 +157,7 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
   }
 
   Future<List<PickedDisputeFile>?> _defaultPickFiles() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: allowedDisputeFileExtensions.toList(growable: false),
       allowMultiple: true,

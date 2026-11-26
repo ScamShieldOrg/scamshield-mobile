@@ -5,9 +5,11 @@ import '../../data/models/auth_user.dart';
 import 'scam_shield_brand_badge.dart';
 
 enum _GuestDestination {
-  history('Lịch Sử Kiểm Tra', Icons.history),
-  myReports('Báo Cáo Của Tôi', Icons.folder_shared_outlined),
-  myAppeals('Khiếu nại của tôi', Icons.gavel_outlined);
+  check('Kiểm tra', Icons.manage_search_outlined),
+  resources('Tài nguyên', Icons.folder_open_outlined),
+  trends('Xu hướng lừa đảo', Icons.trending_up),
+  guide('Cẩm nang an toàn', Icons.menu_book_outlined),
+  leaderboard('Bảng vinh danh', Icons.emoji_events_outlined);
 
   const _GuestDestination(this.title, this.icon);
 
@@ -16,12 +18,7 @@ enum _GuestDestination {
 }
 
 class GuestMenu extends StatelessWidget {
-  const GuestMenu({
-    super.key,
-    this.user,
-    this.onLogin,
-    this.onSignOut,
-  });
+  const GuestMenu({super.key, this.user, this.onLogin, this.onSignOut});
 
   /// Supplied when an authenticated session is active.
   final AuthUser? user;
@@ -31,7 +28,6 @@ class GuestMenu extends StatelessWidget {
 
   /// Supplied only while an authenticated session is active.
   final VoidCallback? onSignOut;
-  final ValueChanged<bool>? onLightModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -41,15 +37,11 @@ class GuestMenu extends StatelessWidget {
         : currentUser?.phoneNumber;
 
     return Drawer(
-      width: 292,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.horizontal(left: Radius.circular(24)),
-      ),
-      backgroundColor: colors.surface,
+      backgroundColor: Colors.white,
       surfaceTintColor: Colors.transparent,
       child: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
           children: [
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -67,84 +59,24 @@ class GuestMenu extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                title: const Text(
-                  'ScamShield',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 17,
-                  ),
-                ),
-                trailing: IconButton(
-                  tooltip: 'Đóng menu',
-                  color: Colors.white,
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded, size: 20),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              margin: EdgeInsets.zero,
-              elevation: 0,
-              color: colors.surfaceContainerLow,
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  for (final destination in _GuestDestination.values)
-                    ListTile(
-                      leading: _MenuIcon(icon: destination.icon),
-                      trailing: const Icon(
-                        Icons.chevron_right_rounded,
-                        size: 18,
+                onTap: () {
+                  final navigator = Navigator.of(context);
+                  navigator.pop();
+                  if (destination != _GuestDestination.check) {
+                    navigator.push<void>(
+                      MaterialPageRoute(
+                        builder: (_) => _GuestSection(destination: destination),
                       ),
-                      title: Text(destination.title),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      onTap: () =>
-                          _openSection(context, destination.title, const [
-                            (
-                              'Tính năng đang được chuẩn bị',
-                              'Mục này chưa khả dụng trên ứng dụng di động.',
-                            ),
-                          ]),
-                    ),
-                  ListTile(
-                    leading: const _MenuIcon(
-                      icon: Icons.person_outline_rounded,
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded, size: 18),
-                    title: const Text('Tài khoản'),
-                    onTap: () => _openAccountInfo(context, 'Tài khoản'),
-                  ),
-                ],
+                    );
+                  }
+                },
               ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              margin: EdgeInsets.zero,
-              elevation: 0,
-              color: colors.surfaceContainerLow,
-              child: SwitchListTile(
-                secondary: _MenuIcon(
-                  icon: isLight
-                      ? Icons.light_mode_outlined
-                      : Icons.dark_mode_outlined,
-                ),
-                title: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      isLight ? 'Chế độ sáng' : 'Chế độ tối',
-                      maxLines: 1,
-                      softWrap: false,
-                    ),
-                  ),
-                ),
-                value: isLight,
-                onChanged: onLightModeChanged,
+            const Divider(),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text(
+                'Tài khoản',
+                style: TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
             if (currentUser != null) ...[
@@ -205,8 +137,6 @@ class GuestMenu extends StatelessWidget {
             ],
             if (onSignOut case final signOut?)
               ListTile(
-                textColor: colors.error,
-                iconColor: colors.error,
                 leading: const Icon(Icons.logout),
                 title: const Text('Đăng xuất'),
                 onTap: () {
@@ -259,64 +189,67 @@ class GuestMenu extends StatelessWidget {
   }
 }
 
-class _MenuIcon extends StatelessWidget {
-  const _MenuIcon({required this.icon, this.background, this.foreground});
+class _GuestSection extends StatelessWidget {
+  const _GuestSection({required this.destination});
 
-  final IconData icon;
-  final Color? background;
-  final Color? foreground;
+  final _GuestDestination destination;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: background ?? colors.secondaryContainer,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(
-        icon,
-        size: 19,
-        color: foreground ?? colors.onSecondaryContainer,
-      ),
-    );
+    final cards = switch (destination) {
+      _GuestDestination.resources => const [
+        (
+          'Danh sách cảnh báo',
+          'Danh sách số điện thoại và tên miền đã được báo cáo sẽ xuất hiện khi có dữ liệu tra cứu.',
+        ),
+      ],
+      _GuestDestination.trends => const [
+        (
+          'Chưa có số liệu xu hướng',
+          'Bạn có thể xem các tình huống minh họa trong mục Cảnh báo lừa đảo trên trang Kiểm tra.',
+        ),
+      ],
+      _GuestDestination.guide => const [
+        (
+          'Kiểm tra người gửi',
+          'Khi nhận tin nhắn bất ngờ, hãy xác minh qua ứng dụng hoặc kênh liên hệ chính thức.',
+        ),
+        (
+          'Giữ kín mã xác thực',
+          'Chỉ nhập mã OTP vào ứng dụng hoặc trang chính thức khi bạn chủ động thực hiện giao dịch.',
+        ),
+        (
+          'Kiểm tra tên miền',
+          'Nếu nghi ngờ một đường dẫn, hãy tự mở trang chính thức thay vì bấm vào liên kết trong tin nhắn.',
+        ),
+      ],
+      _GuestDestination.leaderboard => const [
+        (
+          'Chưa có dữ liệu bảng vinh danh',
+          'Mục này hiển thị những thành viên có đóng góp cho cộng đồng ScamShield.',
+        ),
+      ],
+      _GuestDestination.check => const <(String, String)>[],
+    };
+
+    return _SectionPage(title: destination.title, cards: cards);
   }
 }
 
 class _SectionPage extends StatelessWidget {
-  const _SectionPage({
-    required this.title,
-    required this.cards,
-    this.onSignOut,
-    this.onLightModeChanged,
-  });
+  const _SectionPage({required this.title, required this.cards});
 
   final String title;
   final List<(String, String)> cards;
-  final VoidCallback? onSignOut;
-  final ValueChanged<bool>? onLightModeChanged;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const ScamShieldHeader(),
-      endDrawer: GuestMenu(
-        onSignOut: onSignOut,
-        onLightModeChanged: onLightModeChanged,
-      ),
-      bottomNavigationBar: ScamShieldNavigation(
-        selected: ScamShieldTab.menu,
-        onSignOut: onSignOut,
-        onLightModeChanged: onLightModeChanged,
-      ),
+      appBar: AppBar(title: Text(title)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text(title, style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 12),
             for (final (heading, description) in cards)
               Card(
                 margin: const EdgeInsets.only(bottom: 12),

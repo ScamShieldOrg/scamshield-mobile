@@ -7,15 +7,15 @@ import '../shared/scamshield_header.dart';
 import '../shared/scamshield_navigation.dart';
 import 'report_form.dart';
 
-class ReportScreen extends StatelessWidget {
+class ReportScreen extends StatefulWidget {
   const ReportScreen({
     super.key,
-    this.accessToken,
+    required this.accessToken,
     this.onSignOut,
     this.onLightModeChanged,
   });
 
-  final String? accessToken;
+  final String accessToken;
   final VoidCallback? onSignOut;
   final ValueChanged<bool>? onLightModeChanged;
 
@@ -55,10 +55,7 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const ScamShieldHeader(),
-      endDrawer: GuestMenu(
-        onSignOut: widget.onSignOut,
-        onLightModeChanged: widget.onLightModeChanged,
-      ),
+      endDrawer: GuestMenu(onSignOut: widget.onSignOut),
       bottomNavigationBar: ScamShieldNavigation(
         selected: ScamShieldTab.report,
         onSignOut: widget.onSignOut,
@@ -95,7 +92,7 @@ class _ReportScreenState extends State<ReportScreen> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                ReportForm(accessToken: accessToken),
+                ReportForm(key: _formKey, accessToken: widget.accessToken),
               ],
             ),
           ),
@@ -314,3 +311,48 @@ class _ReportHero extends StatelessWidget {
     );
   }
 }
+
+Future<bool?> showReportLoginPrompt(BuildContext context) => showDialog<bool>(
+  context: context,
+  builder: (context) => AlertDialog(
+    scrollable: true,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+    icon: Center(
+      child: CircleAvatar(
+        radius: 26,
+        backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+        foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+        child: const Icon(Icons.verified_user_outlined),
+      ),
+    ),
+    title: const Text(
+      'Cần đăng nhập',
+      textAlign: TextAlign.center,
+      style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
+    ),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Vui lòng đăng nhập để gửi báo cáo.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          onPressed: () => Navigator.pop(context, true),
+          icon: const Icon(Icons.login_rounded, size: 18),
+          label: const Text('Đến trang đăng nhập', textAlign: TextAlign.center),
+        ),
+        const SizedBox(height: 4),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Hủy'),
+        ),
+      ],
+    ),
+  ),
+);
