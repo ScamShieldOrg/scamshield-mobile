@@ -17,6 +17,21 @@ import UIKit
       return
     }
     FlutterMethodChannel(
+      name: "scamshield/guest_session",
+      binaryMessenger: registrar.messenger()
+    ).setMethodCallHandler { call, result in
+      let key = "scamshield.guestSession"
+      switch call.method {
+      case "read":
+        result(UserDefaults.standard.string(forKey: key))
+      case "write":
+        UserDefaults.standard.set(call.arguments as? String, forKey: key)
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    FlutterMethodChannel(
       name: "scamshield/privacy_reference",
       binaryMessenger: registrar.messenger()
     ).setMethodCallHandler { call, result in

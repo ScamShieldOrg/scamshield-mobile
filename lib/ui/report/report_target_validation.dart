@@ -1,3 +1,5 @@
+import 'package:flutter/services.dart';
+
 import '../home/scam_check_validation.dart';
 
 String formatReportPhoneInput(String value) {
@@ -36,7 +38,7 @@ enum ReportTargetType {
   final String label;
 }
 
-bool _matches(ReportTargetType type, String value) {
+bool matchesReportTarget(ReportTargetType type, String value) {
   if (value.length > 10000) return false;
   switch (type) {
     case ReportTargetType.phone:
@@ -68,7 +70,9 @@ bool _matches(ReportTargetType type, String value) {
 
 String? reportTargetTypeWarning(ReportTargetType? selected, String input) {
   final value = input.trim();
-  if (selected == null || value.isEmpty || _matches(selected, value)) {
+  if (selected == null ||
+      value.isEmpty ||
+      matchesReportTarget(selected, value)) {
     return null;
   }
   if (selected == ReportTargetType.phone) {
@@ -90,10 +94,54 @@ String? reportTargetTypeWarning(ReportTargetType? selected, String input) {
   }
 
   final candidates = ReportTargetType.values
-      .where((type) => type != selected && _matches(type, value))
+      .where((type) => type != selected && matchesReportTarget(type, value))
       .map((type) => type.label)
       .join(' hoặc ');
   if (candidates.isEmpty) return null;
   return 'Dữ liệu đã nhập có thể thuộc loại $candidates. '
       'Vui lòng kiểm tra lại loại đối tượng báo cáo.';
 }
+
+final reportPhoneInputFormatter = TextInputFormatter.withFunction((
+  oldValue,
+  newValue,
+) {
+  if (!newValue.composing.isCollapsed) return newValue;
+
+  int countDigits(String text) => RegExp(r'[0-9]').allMatches(text).length;
+  final phone = newValue.text.replaceAll(RegExp(r'[\s.()-]'), '');
+  final limit = switch (phone) {
+    _ when phone.startsWith('+84') => 11,
+    _ when phone.startsWith('0084') => 13,
+    _ when phone.startsWith('84') => 11,
+    _ when phone.startsWith('0') => 10,
+    _ => null,
+  };
+  final digits = countDigits(phone);
+  if (limit != null && digits > limit && digits >= countDigits(oldValue.text)) {
+    return oldValue;
+  }
+  final formatted = formatReportPhoneInput(newValue.text);
+  if (formatted == newValue.text || !newValue.selection.isValid) {
+    return newValue;
+  }
+
+  int mapOffset(int offset) {
+    final precedingDigits = countDigits(newValue.text.substring(0, offset));
+    var position = formatted.startsWith('+') && offset > 0 ? 1 : 0;
+    var seen = 0;
+    while (position < formatted.length && seen < precedingDigits) {
+      seen += countDigits(formatted[position]);
+      position++;
+    }
+    return position;
+  }
+
+  return TextEditingValue(
+    text: formatted,
+    selection: newValue.selection.copyWith(
+      baseOffset: mapOffset(newValue.selection.baseOffset),
+      extentOffset: mapOffset(newValue.selection.extentOffset),
+    ),
+  );
+});

@@ -15,6 +15,18 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        val guestSession = getSharedPreferences("guest_session", MODE_PRIVATE)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "scamshield/guest_session")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "read" -> result.success(guestSession.getString("token", null))
+                    "write" -> {
+                        guestSession.edit().putString("token", call.arguments as String).apply()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "scamshield/privacy_reference")
             .setMethodCallHandler { call, result ->
                 if (call.method != "open") {

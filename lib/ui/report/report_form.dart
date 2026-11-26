@@ -597,7 +597,7 @@ class _ReportFormState extends State<ReportForm> {
                     controller: _identifier,
                     enabled: _target != null,
                     inputFormatters: _target == _ReportTarget.phone
-                        ? [_phoneLengthFormatter]
+                        ? [reportPhoneInputFormatter]
                         : null,
                     focusNode: _identifierFocus,
                     onChanged: (_) {
@@ -841,50 +841,6 @@ String _regionSearchKey(String value) => value
     .replaceAll('đ', 'd')
     .replaceAll(RegExp(r'[\u0300-\u036f]'), '')
     .replaceAll(RegExp(r'\s+'), ' ');
-
-final _phoneLengthFormatter = TextInputFormatter.withFunction((
-  oldValue,
-  newValue,
-) {
-  if (!newValue.composing.isCollapsed) return newValue;
-
-  int countDigits(String text) => RegExp(r'[0-9]').allMatches(text).length;
-  final phone = newValue.text.replaceAll(RegExp(r'[\s.()-]'), '');
-  final limit = switch (phone) {
-    _ when phone.startsWith('+84') => 11,
-    _ when phone.startsWith('0084') => 13,
-    _ when phone.startsWith('84') => 11,
-    _ when phone.startsWith('0') => 10,
-    _ => null,
-  };
-  final digits = countDigits(phone);
-  if (limit != null && digits > limit && digits >= countDigits(oldValue.text)) {
-    return oldValue;
-  }
-  final formatted = formatReportPhoneInput(newValue.text);
-  if (formatted == newValue.text || !newValue.selection.isValid) {
-    return newValue;
-  }
-
-  int mapOffset(int offset) {
-    final precedingDigits = countDigits(newValue.text.substring(0, offset));
-    var position = formatted.startsWith('+') && offset > 0 ? 1 : 0;
-    var seen = 0;
-    while (position < formatted.length && seen < precedingDigits) {
-      seen += countDigits(formatted[position]);
-      position++;
-    }
-    return position;
-  }
-
-  return TextEditingValue(
-    text: formatted,
-    selection: newValue.selection.copyWith(
-      baseOffset: mapOffset(newValue.selection.baseOffset),
-      extentOffset: mapOffset(newValue.selection.extentOffset),
-    ),
-  );
-});
 
 const _labelStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w700);
 
