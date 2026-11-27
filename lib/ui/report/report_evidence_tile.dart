@@ -28,8 +28,13 @@ class ReportEvidenceTile extends StatelessWidget {
             child: InteractiveViewer(
               maxScale: 4,
               child: Center(
-                child: Image.memory(
-                  file.bytes,
+                child: Image(
+                  image: ResizeImage(
+                    MemoryImage(file.bytes),
+                    width: 2048,
+                    height: 2048,
+                    policy: ResizeImagePolicy.fit,
+                  ),
                   fit: BoxFit.contain,
                   semanticLabel: file.name,
                   errorBuilder: (_, _, _) =>

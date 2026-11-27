@@ -79,7 +79,22 @@ class MainActivity : FlutterActivity() {
 
     private fun scanEvidence(bytes: ByteArray, result: MethodChannel.Result) {
         Thread {
-            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                runOnUiThread { result.error("ocr", "Invalid image", null) }
+                return@Thread
+            }
+            var sampleSize = 1
+            val longestSide = maxOf(bounds.outWidth, bounds.outHeight)
+            while (longestSide.toLong() > 4096L * sampleSize) sampleSize *= 2
+            val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+            val bitmap = try {
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+            } catch (_: OutOfMemoryError) {
+                runOnUiThread { result.error("ocr", "Not enough memory to decode image", null) }
+                return@Thread
+            }
             if (bitmap == null) {
                 runOnUiThread { result.error("ocr", "Invalid image", null) }
                 return@Thread

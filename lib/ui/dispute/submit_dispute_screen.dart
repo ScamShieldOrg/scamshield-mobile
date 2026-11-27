@@ -40,6 +40,7 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
   final _reasonController = TextEditingController();
 
   bool _isSubmitting = false;
+  int _submissionAttempt = 0;
   int? _submittedDisputeCount;
   DisputeIndicatorType _indicatorType = DisputeIndicatorType.phone;
   DisputeLegalRelationship _legalRelationship =
@@ -155,6 +156,7 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
       return;
     }
 
+    final submissionAttempt = _submissionAttempt;
     List<PickedDisputeFile>? picked;
     try {
       final picker = widget.attachmentPicker ?? _defaultPickFiles;
@@ -167,7 +169,10 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
       return;
     }
 
-    if (!mounted || picked == null || picked.isEmpty) {
+    if (!mounted ||
+        submissionAttempt != _submissionAttempt ||
+        picked == null ||
+        picked.isEmpty) {
       return;
     }
 
@@ -252,6 +257,7 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
     FocusScope.of(context).unfocus();
     setState(() {
       _isSubmitting = true;
+      _submissionAttempt++;
       _submitError = null;
     });
 
@@ -505,7 +511,13 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
               const SizedBox(height: 18),
               _buildSegmentedTabs(),
               const SizedBox(height: 16),
-              _buildDisputeFormCard(),
+              ExcludeFocus(
+                excluding: _isSubmitting,
+                child: AbsorbPointer(
+                  absorbing: _isSubmitting,
+                  child: _buildDisputeFormCard(),
+                ),
+              ),
               const SizedBox(height: 14),
               _buildImportantNotesCard(),
             ],

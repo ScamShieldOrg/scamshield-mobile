@@ -229,13 +229,16 @@ class GuestMenu extends StatelessWidget {
                 icon: const Icon(Icons.login, size: 18),
                 label: const Text('Đăng nhập'),
                 onPressed: () {
+                  final navigator = Navigator.of(context);
                   final login = onLogin;
+                  navigator.pop();
                   if (login == null) {
-                    _openAccountInfo(context, 'Đăng nhập');
-                    return;
+                    navigator.push<bool>(
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    );
+                  } else {
+                    login();
                   }
-                  Navigator.of(context).pop();
-                  login();
                 },
               ),
               const SizedBox(height: 6),

@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../app/auth_state.dart';
 import '../../data/models/resource_entry.dart';
 import '../../data/repositories/resource_repository.dart';
+import '../auth/login_screen.dart';
 import '../shared/guest_menu.dart';
 import '../shared/scamshield_header.dart';
 import '../shared/scamshield_navigation.dart';
@@ -107,7 +110,16 @@ class _ResourceScreenState extends State<ResourceScreen> {
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Để sau'),
           ),
-          const FilledButton(onPressed: null, child: Text('Đăng nhập')),
+          FilledButton(
+            onPressed: () {
+              final navigator = Navigator.of(dialogContext);
+              navigator.pop();
+              navigator.push<bool>(
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              );
+            },
+            child: const Text('Đăng nhập'),
+          ),
         ],
       ),
     );
@@ -119,7 +131,8 @@ class _ResourceScreenState extends State<ResourceScreen> {
     final colors = theme.colorScheme;
     final warnings = _list == ResourceList.warnings;
     final result = _result;
-    final isGuest = widget.onSignOut == null;
+    final authState = context.watch<AuthState?>();
+    final isGuest = !(authState?.isAuthenticated ?? (widget.onSignOut != null));
 
     return Scaffold(
       appBar: const ScamShieldHeader(pageTitle: 'Tra cứu tài nguyên'),

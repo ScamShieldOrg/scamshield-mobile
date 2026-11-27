@@ -67,7 +67,7 @@ class ReportFormState extends State<ReportForm>
       >[];
   List<ReportOption> _regions = [];
   List<ReportOption> _categories = const [];
-  bool _loadingRegions = true;
+  bool _loadingRegions = false;
   String? _regionsError;
   bool _loadingCategories = false;
   String? _categoriesError;
@@ -138,6 +138,8 @@ class ReportFormState extends State<ReportForm>
   }
 
   Future<void> _loadRegions() async {
+    if (_loadingRegions) return;
+    setState(() => _loadingRegions = true);
     try {
       final regions = await _service.regions();
       if (mounted) {
@@ -693,6 +695,14 @@ class ReportFormState extends State<ReportForm>
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (_regionsError != null)
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TextButton(
+                      onPressed: _loadingRegions || _busy ? null : _loadRegions,
+                      child: const Text('Thử lại tải tỉnh/thành'),
+                    ),
+                  ),
                 const _RequiredLabel('Danh mục thủ đoạn'),
                 _requireTarget(
                   DropdownButtonFormField<String>(

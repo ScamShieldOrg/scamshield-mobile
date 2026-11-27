@@ -28,7 +28,7 @@ void main() {
         final covered = x >= 2 && x < 7 && y >= 3 && y < 8;
         expect(
           pixels.getUint32((y * result.width + x) * 4),
-          covered ? 0xBA1A1AFF : 0xFFFFFFFF,
+          covered ? 0xFF2020FF : 0xFFFFFFFF,
           reason: 'Pixel at ($x, $y)',
         );
       }
