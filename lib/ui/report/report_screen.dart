@@ -72,27 +72,12 @@ class _ReportScreenState extends State<ReportScreen> {
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               children: [
                 const _ReportHero(),
-                const SizedBox(height: 10),
-                Center(
-                  child: TextButton.icon(
-                    onPressed: () => _showPrivacyNotice(context),
-                    icon: const Icon(Icons.lock_outline, size: 18),
-                    style: TextButton.styleFrom(
-                      backgroundColor: const Color(0xFFE6F2FF),
-                      foregroundColor: const Color(0xFF174E8A),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                    label: const Text(
-                      'Bảo vệ thông tin (Zero-PII)',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 18),
-                ReportForm(key: _formKey, accessToken: widget.accessToken),
+                ReportForm(
+                  key: _formKey,
+                  accessToken: widget.accessToken,
+                  onShowPrivacyNotice: () => _showPrivacyNotice(context),
+                ),
               ],
             ),
           ),
@@ -104,105 +89,153 @@ class _ReportScreenState extends State<ReportScreen> {
   void _showPrivacyNotice(BuildContext context) {
     showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => Dialog(
         insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-        title: const Text(
-          'Bảo vệ thông tin khi báo cáo',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-        ),
-        scrollable: true,
-        content: Column(
+        constraints: const BoxConstraints(maxWidth: 440),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _PrivacyTip(
-              Icons.shield_outlined,
-              'Chỉ chia sẻ dữ liệu cần để xác minh lừa đảo.',
-            ),
-            const _PrivacyTip(
-              Icons.visibility_off_outlined,
-              'Che tên, ảnh đại diện, địa chỉ và dữ liệu cá nhân không liên quan trong minh chứng.',
-            ),
-            const _PrivacyTip(
-              Icons.lock_outline,
-              'Không gửi mật khẩu, mã OTP hoặc ảnh giấy tờ tùy thân.',
-            ),
-            const _PrivacyTip(
-              Icons.fact_check_outlined,
-              'Giữ lại số điện thoại, đường link hoặc tài khoản của đối tượng để đối chiếu.',
-            ),
-            Text(
-              'Báo cáo gắn với tài khoản của bạn để theo dõi xử lý. Hãy che dữ liệu nhạy cảm trước khi tải tệp lên.',
-              style: Theme.of(dialogContext).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 14),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: Theme.of(dialogContext).colorScheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(12),
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(20, 12, 8, 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.privacy_tip_outlined),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Bảo vệ thông tin khi báo cáo',
+                      style: Theme.of(dialogContext).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Đóng',
+                    constraints: const BoxConstraints.tightFor(
+                      width: 48,
+                      height: 48,
+                    ),
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
+            ),
+            const Divider(height: 1),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Nguồn tham khảo · NIST SP 800-122',
-                      style: TextStyle(fontWeight: FontWeight.w800),
+                    const _PrivacyTip(
+                      Icons.shield_outlined,
+                      'Chỉ chia sẻ thông tin cần thiết',
+                      'Báo cáo gắn với tài khoản để bạn theo dõi kết quả xử lý.',
                     ),
-                    const Text(
-                      'Hướng dẫn bảo vệ thông tin nhận dạng cá nhân (PII)',
-                      style: TextStyle(fontSize: 12),
+                    const _PrivacyTip(
+                      Icons.visibility_off_outlined,
+                      'Che dữ liệu cá nhân',
+                      'Che tên, ảnh đại diện, địa chỉ và dữ liệu cá nhân không liên quan trong minh chứng.',
                     ),
-                    Wrap(
-                      spacing: 4,
-                      children: [
-                        TextButton.icon(
-                          icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                          label: const Text('Mở tài liệu NIST'),
-                          onPressed: () async {
-                            var opened = false;
-                            try {
-                              opened =
-                                  await const MethodChannel(
-                                    'scamshield/privacy_reference',
-                                  ).invokeMethod<bool>('open') ??
-                                  false;
-                            } on PlatformException {
-                              opened = false;
-                            } on MissingPluginException {
-                              opened = false;
-                            }
-                            if (!opened && dialogContext.mounted) {
-                              ScaffoldMessenger.of(dialogContext).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Không mở được trình duyệt.'),
+                    const _PrivacyTip(
+                      Icons.lock_outline,
+                      'Giữ kín thông tin xác thực',
+                      'Không gửi mật khẩu, mã OTP hoặc ảnh giấy tờ tùy thân.',
+                    ),
+                    const _PrivacyTip(
+                      Icons.fact_check_outlined,
+                      'Giữ lại dấu hiệu để đối chiếu',
+                      'Giữ lại số điện thoại, đường link hoặc tài khoản của đối tượng để đối chiếu.',
+                    ),
+                    const SizedBox(height: 8),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          dialogContext,
+                        ).colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Nguồn tham khảo · NIST SP 800-122',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                            const Text(
+                              'Hướng dẫn bảo vệ thông tin nhận dạng cá nhân (PII)',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            Wrap(
+                              spacing: 4,
+                              children: [
+                                TextButton.icon(
+                                  icon: const Icon(
+                                    Icons.open_in_new_rounded,
+                                    size: 16,
+                                  ),
+                                  label: const Text('Mở tài liệu NIST'),
+                                  onPressed: () async {
+                                    var opened = false;
+                                    try {
+                                      opened =
+                                          await const MethodChannel(
+                                            'scamshield/privacy_reference',
+                                          ).invokeMethod<bool>('open') ??
+                                          false;
+                                    } on PlatformException {
+                                      opened = false;
+                                    } on MissingPluginException {
+                                      opened = false;
+                                    }
+                                    if (!opened && dialogContext.mounted) {
+                                      ScaffoldMessenger.of(
+                                        dialogContext,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Không mở được trình duyệt.',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
                                 ),
-                              );
-                            }
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.copy_outlined, size: 18),
-                          tooltip: 'Sao chép liên kết',
-                          onPressed: () async {
-                            await Clipboard.setData(
-                              const ClipboardData(
-                                text:
-                                    'https://csrc.nist.gov/pubs/sp/800/122/final',
-                              ),
-                            );
-                            if (dialogContext.mounted) {
-                              ScaffoldMessenger.of(dialogContext).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Đã sao chép liên kết.'),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.copy_outlined,
+                                    size: 18,
+                                  ),
+                                  tooltip: 'Sao chép liên kết',
+                                  onPressed: () async {
+                                    await Clipboard.setData(
+                                      const ClipboardData(
+                                        text:
+                                            'https://csrc.nist.gov/pubs/sp/800/122/final',
+                                      ),
+                                    );
+                                    if (dialogContext.mounted) {
+                                      ScaffoldMessenger.of(
+                                        dialogContext,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Đã sao chép liên kết.',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
                                 ),
-                              );
-                            }
-                          },
+                              ],
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
@@ -210,45 +243,55 @@ class _ReportScreenState extends State<ReportScreen> {
             ),
           ],
         ),
-        actions: [
-          FilledButton.tonalIcon(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFE6F2FF),
-              foregroundColor: const Color(0xFF174E8A),
-              minimumSize: const Size(104, 44),
-            ),
-            icon: const Icon(Icons.close_rounded, size: 18),
-            label: const Text(
-              'Đóng',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
       ),
     );
   }
 }
 
 class _PrivacyTip extends StatelessWidget {
-  const _PrivacyTip(this.icon, this.text);
+  const _PrivacyTip(this.icon, this.title, this.text);
 
   final IconData icon;
+  final String title;
   final String text;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: colors.secondaryContainer,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: colors.onSecondaryContainer),
+          ),
+          const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(fontSize: 13, height: 1.35),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  text,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    height: 1.45,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -311,48 +354,3 @@ class _ReportHero extends StatelessWidget {
     );
   }
 }
-
-Future<bool?> showReportLoginPrompt(BuildContext context) => showDialog<bool>(
-  context: context,
-  builder: (context) => AlertDialog(
-    scrollable: true,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-    icon: Center(
-      child: CircleAvatar(
-        radius: 26,
-        backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-        foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
-        child: const Icon(Icons.verified_user_outlined),
-      ),
-    ),
-    title: const Text(
-      'Cần đăng nhập',
-      textAlign: TextAlign.center,
-      style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
-    ),
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Vui lòng đăng nhập để gửi báo cáo.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 20),
-        FilledButton.icon(
-          onPressed: () => Navigator.pop(context, true),
-          icon: const Icon(Icons.login_rounded, size: 18),
-          label: const Text('Đến trang đăng nhập', textAlign: TextAlign.center),
-        ),
-        const SizedBox(height: 4),
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Hủy'),
-        ),
-      ],
-    ),
-  ),
-);

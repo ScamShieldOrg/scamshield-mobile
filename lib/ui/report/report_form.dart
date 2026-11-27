@@ -5,6 +5,9 @@ import 'package:flutter/services.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../data/services/report_service.dart';
+import 'evidence_image_editor.dart';
+import 'evidence_image_redaction.dart';
+import 'report_evidence_tile.dart';
 import 'report_target_validation.dart';
 
 enum _ReportTarget {
@@ -36,9 +39,14 @@ enum _ReportTarget {
 }
 
 class ReportForm extends StatefulWidget {
-  const ReportForm({super.key, required this.accessToken});
+  const ReportForm({
+    super.key,
+    required this.accessToken,
+    this.onShowPrivacyNotice,
+  });
 
   final String accessToken;
+  final VoidCallback? onShowPrivacyNotice;
 
   @override
   ReportFormState createState() => ReportFormState();
@@ -53,7 +61,7 @@ class ReportFormState extends State<ReportForm>
   Timer? _identifierDebounce;
   bool _attemptedSubmit = false;
   final _description = TextEditingController();
-  final _files = <ReportEvidence>[];
+  final _files = <({ReportEvidence evidence, bool redacted})>[];
   List<ReportOption> _regions = [];
   List<ReportOption> _categories = const [];
   bool _loadingRegions = true;
@@ -158,9 +166,13 @@ class ReportFormState extends State<ReportForm>
   }
 
   void _message(String message) {
+    final displayMessage = message.replaceAllMapped(
+      RegExp(r'#?\bRPT-0*([0-9]+)\b', caseSensitive: false),
+      (match) => match[1]!,
+    );
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ).showSnackBar(SnackBar(content: Text(displayMessage)));
   }
 
   final _targetStepKey = GlobalKey();
@@ -331,13 +343,33 @@ class ReportFormState extends State<ReportForm>
     final name = file['name'] as String;
     final bytes = file['bytes'] as Uint8List;
     if (bytes.isEmpty ||
-        bytes.length > 5 * 1024 * 1024 ||
+        bytes.length > maxReportEvidenceBytes ||
         !RegExp(r'\.(png|jpe?g|pdf)$', caseSensitive: false).hasMatch(name)) {
       _message('Chọn tệp PNG, JPG hoặc PDF không quá 5 MB.');
       return;
     }
-    setState(() => _files.add((name: name, bytes: bytes)));
+    setState(
+      () => _files.add((evidence: (name: name, bytes: bytes), redacted: false)),
+    );
   });
+
+  Future<void> _editEvidence(int index) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final file = _files[index].evidence;
+    final bytes = await Navigator.of(context).push<Uint8List>(
+      MaterialPageRoute(
+        builder: (_) => EvidenceImageEditor(name: file.name, bytes: file.bytes),
+      ),
+    );
+    if (!mounted || bytes == null) return;
+    final name = file.name.replaceFirst(RegExp(r'\.[^.]+$'), '.png');
+    setState(
+      () => _files[index] = (
+        evidence: (name: name, bytes: bytes),
+        redacted: true,
+      ),
+    );
+  }
 
   Future<void> _submit() async {
     final token = widget.accessToken;
@@ -360,18 +392,22 @@ class ReportFormState extends State<ReportForm>
       return;
     }
     await _run(() async {
-      final code = await _service.submit(token, {
-        'threatType': switch (target) {
-          _ReportTarget.phone => 'PHONE',
-          _ReportTarget.website => 'URL',
-          _ReportTarget.bank => 'BANK_ACCOUNT',
+      final code = await _service.submit(
+        token,
+        {
+          'threatType': switch (target) {
+            _ReportTarget.phone => 'PHONE',
+            _ReportTarget.website => 'URL',
+            _ReportTarget.bank => 'BANK_ACCOUNT',
+          },
+          'targetIdentifier': identifier,
+          'regionCode': region,
+          'category': category,
+          'description': description,
+          'isConfirmed': true,
         },
-        'targetIdentifier': identifier,
-        'regionCode': region,
-        'category': category,
-        'description': description,
-        'isConfirmed': true,
-      }, List.of(_files));
+        [for (final file in _files) file.evidence],
+      );
       if (!mounted) return;
       _identifier.clear();
       _description.clear();
@@ -693,17 +729,14 @@ class ReportFormState extends State<ReportForm>
                     label: Text('Chọn tệp minh chứng'),
                   ),
                 ),
-                for (final file in _files)
-                  ListTile(
-                    dense: true,
-                    title: Text(file.name),
-                    trailing: IconButton(
-                      tooltip: 'Xóa tệp',
-                      onPressed: _busy
-                          ? null
-                          : () => setState(() => _files.remove(file)),
-                      icon: const Icon(Icons.close),
-                    ),
+                for (var index = 0; index < _files.length; index++)
+                  ReportEvidenceTile(
+                    file: _files[index].evidence,
+                    redacted: _files[index].redacted,
+                    onEdit: _busy ? null : () => _editEvidence(index),
+                    onRemove: _busy
+                        ? null
+                        : () => setState(() => _files.removeAt(index)),
                   ),
                 const SizedBox(height: 6),
                 _ReportNotice(
@@ -718,9 +751,10 @@ class ReportFormState extends State<ReportForm>
                   icon: Icons.lock_outline,
                   color: colors.primary,
                   background: panelFill,
+                  onLearnMore: widget.onShowPrivacyNotice,
                   content: const TextSpan(
                     text:
-                        'Hãy che thông tin cá nhân không liên quan trước khi tải tệp lên.',
+                        'Che thông tin cá nhân không liên quan trên ảnh đính kèm. Với PDF, hãy che thông tin trước khi chọn tệp.',
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -872,12 +906,14 @@ class _ReportNotice extends StatelessWidget {
     required this.color,
     required this.content,
     this.background,
+    this.onLearnMore,
   });
 
   final IconData icon;
   final Color color;
   final TextSpan content;
   final Color? background;
+  final VoidCallback? onLearnMore;
 
   @override
   Widget build(BuildContext context) {
@@ -887,13 +923,29 @@ class _ReportNotice extends StatelessWidget {
         Icon(icon, size: 18, color: color),
         const SizedBox(width: 8),
         Expanded(
-          child: Text.rich(
-            content,
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.4,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text.rich(
+                content,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  height: 1.4,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (onLearnMore case final learnMore?) ...[
+                const SizedBox(height: 8),
+                FilledButton.tonalIcon(
+                  onPressed: learnMore,
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                  label: const Text('Bảo vệ thông tin Zero-PII'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ],

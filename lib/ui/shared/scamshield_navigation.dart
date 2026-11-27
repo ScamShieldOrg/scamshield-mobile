@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../app/auth_state.dart';
 import '../auth/login_screen.dart';
+import '../dispute/submit_dispute_screen.dart';
 import '../report/report_screen.dart';
 import 'guest_menu.dart';
 import 'scamshield_header.dart';
@@ -39,45 +40,56 @@ class ScamShieldNavigation extends StatelessWidget {
           }
           return;
         }
-        if (tab == selected) return;
+        final navigator = Navigator.of(context);
+        var token = context.read<AuthState?>()?.session?.accessToken;
+        final requiresLogin = tab != ScamShieldTab.check;
+        if (tab == selected &&
+            (!requiresLogin || (token?.isNotEmpty ?? false))) {
+          return;
+        }
 
         final confirm = confirmTabChange;
-        if (confirm != null && (!await confirm() || !context.mounted)) return;
+        if (tab != selected &&
+            confirm != null &&
+            (!await confirm() || !context.mounted)) {
+          return;
+        }
 
-        final navigator = Navigator.of(context);
         if (tab == ScamShieldTab.check) {
           navigator.popUntil((route) => route.isFirst);
           return;
         }
-        String? reportToken;
-        if (tab == ScamShieldTab.report) {
-          reportToken = context.read<AuthState?>()?.session?.accessToken;
-          if (reportToken == null || reportToken.isEmpty) {
-            final proceed = await showReportLoginPrompt(context);
-            if (proceed != true || !context.mounted) return;
-            final loggedIn = await navigator.push<bool>(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-            );
-            if (loggedIn != true || !navigator.mounted) return;
-            reportToken = navigator.context
-                .read<AuthState?>()
-                ?.session
-                ?.accessToken;
-            if (reportToken == null || reportToken.isEmpty) return;
-          }
+
+        if (token == null || token.isEmpty) {
+          final message = switch (tab) {
+            ScamShieldTab.report => 'Vui lòng đăng nhập để gửi báo cáo.',
+            ScamShieldTab.appeal => 'Vui lòng đăng nhập để gửi khiếu nại.',
+            _ => 'Vui lòng đăng nhập để xem huy hiệu.',
+          };
+          final proceed = await _showLoginPrompt(context, message);
+          if (proceed != true || !context.mounted) return;
+          final loggedIn = await navigator.push<bool>(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+          if (loggedIn != true || !context.mounted) return;
+          token = context.read<AuthState?>()?.session?.accessToken;
+          if (token == null || token.isEmpty) return;
         }
+        final reportToken = token;
         final route = MaterialPageRoute<void>(
-          builder: (_) => reportToken != null
-              ? ReportScreen(
-                  accessToken: reportToken,
-                  onSignOut: onSignOut,
-                  onLightModeChanged: onLightModeChanged,
-                )
-              : _TabPage(
-                  tab: tab,
-                  onSignOut: onSignOut,
-                  onLightModeChanged: onLightModeChanged,
-                ),
+          builder: (_) => switch (tab) {
+            ScamShieldTab.appeal => const SubmitDisputeScreen(),
+            ScamShieldTab.report => ReportScreen(
+              accessToken: reportToken,
+              onSignOut: onSignOut,
+              onLightModeChanged: onLightModeChanged,
+            ),
+            _ => _TabPage(
+              tab: tab,
+              onSignOut: onSignOut,
+              onLightModeChanged: onLightModeChanged,
+            ),
+          },
         );
         if (selected == ScamShieldTab.check || selected == ScamShieldTab.menu) {
           navigator.popUntil((route) => route.isFirst);
@@ -134,9 +146,7 @@ class _TabPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = tab == ScamShieldTab.appeal
-        ? 'Gửi Khiếu Nại'
-        : 'Huy Hiệu & Đổi Thưởng';
+    const title = 'Huy Hiệu & Đổi Thưởng';
     return Scaffold(
       appBar: const ScamShieldHeader(),
       endDrawer: GuestMenu(onSignOut: onSignOut),
@@ -158,3 +168,52 @@ class _TabPage extends StatelessWidget {
     );
   }
 }
+
+Future<bool?> _showLoginPrompt(BuildContext context, String message) =>
+    showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        scrollable: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        icon: Center(
+          child: CircleAvatar(
+            radius: 26,
+            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+            child: const Icon(Icons.verified_user_outlined),
+          ),
+        ),
+        title: const Text(
+          'Cần đăng nhập',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(context, true),
+              icon: const Icon(Icons.login_rounded, size: 18),
+              label: const Text(
+                'Đến trang đăng nhập',
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Hủy'),
+            ),
+          ],
+        ),
+      ),
+    );

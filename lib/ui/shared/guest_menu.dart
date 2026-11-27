@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../app/auth_state.dart';
 import '../../data/models/auth_user.dart';
+import '../auth/login_screen.dart';
 import '../education/education_screen.dart';
 import '../resources/resource_screen.dart';
 import 'scamshield_header.dart';
@@ -39,6 +42,10 @@ class GuestMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authState = context.watch<AuthState?>();
+    final isSignedIn = authState != null
+        ? authState.session != null
+        : user != null || onSignOut != null;
     final colors = Theme.of(context).colorScheme;
     final isLight = colors.brightness == Brightness.light;
     return Drawer(
@@ -135,32 +142,37 @@ class GuestMenu extends StatelessWidget {
                     },
                   ),
                   for (final destination in _GuestDestination.values)
+                    if (isSignedIn || destination == _GuestDestination.history)
+                      ListTile(
+                        leading: _MenuIcon(icon: destination.icon),
+                        trailing: const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 18,
+                        ),
+                        title: Text(destination.title),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        onTap: () =>
+                            _openSection(context, destination.title, const [
+                              (
+                                'Tính năng đang được chuẩn bị',
+                                'Mục này chưa khả dụng trên ứng dụng di động.',
+                              ),
+                            ]),
+                      ),
+                  if (isSignedIn)
                     ListTile(
-                      leading: _MenuIcon(icon: destination.icon),
+                      leading: const _MenuIcon(
+                        icon: Icons.person_outline_rounded,
+                      ),
                       trailing: const Icon(
                         Icons.chevron_right_rounded,
                         size: 18,
                       ),
-                      title: Text(destination.title),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      onTap: () =>
-                          _openSection(context, destination.title, const [
-                            (
-                              'Tính năng đang được chuẩn bị',
-                              'Mục này chưa khả dụng trên ứng dụng di động.',
-                            ),
-                          ]),
+                      title: const Text('Tài khoản'),
+                      onTap: () => _openAccountInfo(context, 'Tài khoản'),
                     ),
-                  ListTile(
-                    leading: const _MenuIcon(
-                      icon: Icons.person_outline_rounded,
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded, size: 18),
-                    title: const Text('Tài khoản'),
-                    onTap: () => _openAccountInfo(context, 'Tài khoản'),
-                  ),
                 ],
               ),
             ),
@@ -191,16 +203,26 @@ class GuestMenu extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            if (onSignOut case final signOut?)
-              ListTile(
-                textColor: colors.error,
-                iconColor: colors.error,
-                leading: const Icon(Icons.logout),
-                title: const Text('Đăng xuất'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  signOut();
-                },
+            if (isSignedIn)
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: colors.error,
+                  backgroundColor: colors.errorContainer.withValues(alpha: .22),
+                  side: BorderSide(color: colors.error.withValues(alpha: .35)),
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.logout_rounded, size: 20),
+                label: Text(
+                  authState?.isBusy == true ? 'Đang đăng xuất…' : 'Đăng xuất',
+                ),
+                onPressed:
+                    authState?.isBusy == true ||
+                        (authState == null && onSignOut == null)
+                    ? null
+                    : () => _confirmSignOut(context, authState),
               )
             else ...[
               FilledButton.icon(
@@ -227,6 +249,69 @@ class GuestMenu extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _confirmSignOut(
+    BuildContext context,
+    AuthState? authState,
+  ) async {
+    final navigator = Navigator.of(context);
+    final scaffold = Scaffold.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final colors = Theme.of(dialogContext).colorScheme;
+        return AlertDialog(
+          scrollable: true,
+          icon: Icon(Icons.logout_rounded, color: colors.error),
+          title: const Text('Đăng xuất?'),
+          content: const Text('Bạn có chắc muốn đăng xuất'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Hủy'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: colors.error,
+                foregroundColor: colors.onError,
+              ),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Đăng xuất'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !context.mounted || authState?.isBusy == true) {
+      return;
+    }
+
+    try {
+      if (authState != null) {
+        await authState.signOut();
+      } else {
+        onSignOut?.call();
+      }
+    } catch (_) {
+      if (messenger.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Không xóa được phiên đăng nhập đã lưu.'),
+          ),
+        );
+      }
+    }
+    if (!navigator.mounted) return;
+    if (scaffold.mounted) {
+      if (scaffold.isEndDrawerOpen) scaffold.closeEndDrawer();
+      if (scaffold.isDrawerOpen) scaffold.closeDrawer();
+    }
+    navigator.pushAndRemoveUntil<bool>(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => route.isFirst,
     );
   }
 
