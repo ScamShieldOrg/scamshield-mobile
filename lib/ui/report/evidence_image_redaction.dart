@@ -49,7 +49,7 @@ Future<Uint8List> exportRedactedEvidence(
       ui.Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
       ui.Paint()..filterQuality = ui.FilterQuality.low,
     );
-    final paint = ui.Paint()..color = AppTheme.error;
+    final paint = ui.Paint()..color = AppTheme.evidenceMaskRed;
     for (final mask in masks) {
       canvas.drawRect(
         ui.Rect.fromLTRB(

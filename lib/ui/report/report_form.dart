@@ -61,7 +61,10 @@ class ReportFormState extends State<ReportForm>
   Timer? _identifierDebounce;
   bool _attemptedSubmit = false;
   final _description = TextEditingController();
-  final _files = <({ReportEvidence evidence, bool redacted})>[];
+  final _files =
+      <
+        ({ReportEvidence original, ReportEvidence evidence, List<Rect> masks})
+      >[];
   List<ReportOption> _regions = [];
   List<ReportOption> _categories = const [];
   bool _loadingRegions = true;
@@ -165,14 +168,41 @@ class ReportFormState extends State<ReportForm>
     super.dispose();
   }
 
-  void _message(String message) {
+  void _message(String message, {bool success = false}) {
     final displayMessage = message.replaceAllMapped(
       RegExp(r'#?\bRPT-0*([0-9]+)\b', caseSensitive: false),
       (match) => match[1]!,
     );
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(displayMessage)));
+    final theme = Theme.of(context);
+    final verified = AppTheme.verifiedColors(theme.brightness);
+    final background = success
+        ? verified.background
+        : theme.colorScheme.errorContainer;
+    final foreground = success
+        ? verified.foreground
+        : theme.colorScheme.onErrorContainer;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          backgroundColor: background,
+          content: Row(
+            children: [
+              Icon(
+                success ? Icons.check_circle_outline : Icons.error_outline,
+                color: foreground,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  displayMessage,
+                  style: TextStyle(color: foreground),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
   }
 
   final _targetStepKey = GlobalKey();
@@ -348,25 +378,34 @@ class ReportFormState extends State<ReportForm>
       _message('Chọn tệp PNG, JPG hoặc PDF không quá 5 MB.');
       return;
     }
+    final evidence = (name: name, bytes: bytes);
     setState(
-      () => _files.add((evidence: (name: name, bytes: bytes), redacted: false)),
+      () =>
+          _files.add((original: evidence, evidence: evidence, masks: const [])),
     );
   });
 
   Future<void> _editEvidence(int index) async {
     FocusManager.instance.primaryFocus?.unfocus();
-    final file = _files[index].evidence;
-    final bytes = await Navigator.of(context).push<Uint8List>(
+    final file = _files[index];
+    final edit = await Navigator.of(context).push<EvidenceImageEdit>(
       MaterialPageRoute(
-        builder: (_) => EvidenceImageEditor(name: file.name, bytes: file.bytes),
+        builder: (_) => EvidenceImageEditor(
+          name: file.original.name,
+          bytes: file.original.bytes,
+          initialMasks: file.masks,
+        ),
       ),
     );
-    if (!mounted || bytes == null) return;
-    final name = file.name.replaceFirst(RegExp(r'\.[^.]+$'), '.png');
+    if (!mounted || edit == null) return;
+    final name = edit.masks.isEmpty
+        ? file.original.name
+        : file.original.name.replaceFirst(RegExp(r'\.[^.]+$'), '.png');
     setState(
       () => _files[index] = (
-        evidence: (name: name, bytes: bytes),
-        redacted: true,
+        original: file.original,
+        evidence: (name: name, bytes: edit.bytes),
+        masks: edit.masks,
       ),
     );
   }
@@ -421,7 +460,10 @@ class ReportFormState extends State<ReportForm>
         _region = null;
         _category = null;
       });
-      _message('Đã gửi báo cáo $code. Vui lòng theo dõi kết quả kiểm duyệt.');
+      _message(
+        'Đã gửi báo cáo $code. Vui lòng theo dõi kết quả kiểm duyệt.',
+        success: true,
+      );
     });
   }
 
@@ -657,6 +699,7 @@ class ReportFormState extends State<ReportForm>
                     key: ValueKey(('category', _category)),
                     initialValue: _category,
                     isExpanded: true,
+                    style: Theme.of(context).textTheme.bodyLarge,
                     items: [
                       for (final option in _categories)
                         DropdownMenuItem(
@@ -732,7 +775,7 @@ class ReportFormState extends State<ReportForm>
                 for (var index = 0; index < _files.length; index++)
                   ReportEvidenceTile(
                     file: _files[index].evidence,
-                    redacted: _files[index].redacted,
+                    redacted: _files[index].masks.isNotEmpty,
                     onEdit: _busy ? null : () => _editEvidence(index),
                     onRemove: _busy
                         ? null

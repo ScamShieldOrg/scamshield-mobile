@@ -28,6 +28,7 @@ abstract final class AppTheme {
   static const mutedInk = Color(0xFF565E6B);
   static const border = Color(0xFFE2E8F0);
   static const error = Color(0xFFBA1A1A);
+  static const evidenceMaskRed = Color(0xFFFF2020);
   static const errorSurface = Color(0xFFFEF2F2);
   static const errorBorder = Color(0xFFFECACA);
   static const accentAmber = Color(0xFFF59E0B);
