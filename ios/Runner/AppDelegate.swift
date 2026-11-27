@@ -86,8 +86,14 @@ import UIKit
       do {
         let file = try FileHandle(forReadingFrom: url)
         defer { try? file.close() }
-        let bytes = try file.read(upToCount: 5 * 1024 * 1024 + 1) ?? Data()
-        guard bytes.count <= 5 * 1024 * 1024 else {
+        let maxBytes = 5 * 1024 * 1024
+        let bytes: Data
+        if #available(iOS 13.4, *) {
+          bytes = try file.read(upToCount: maxBytes + 1) ?? Data()
+        } else {
+          bytes = file.readData(ofLength: maxBytes + 1)
+        }
+        guard bytes.count <= maxBytes else {
           DispatchQueue.main.async {
             result?(FlutterError(code: "file", message: "Tệp vượt quá 5 MB.", details: nil))
           }

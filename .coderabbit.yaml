@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+tone_instructions: "Be professional and concise. Explain the impact of each issue and suggest a small, actionable fix. Prioritize correctness and maintainability."
+early_access: false
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  changed_files_summary: true
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  suggested_labels: true
+  auto_apply_labels: false
+  suggested_reviewers: true
+  poem: false
+  path_filters:
+    - "!**/.dart_tool/**"
+    - "!**/build/**"
+    - "!**/.gradle/**"
+    - "!ios/Pods/**"
+    - "!ios/Flutter/ephemeral/**"
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: true
+    auto_pause_after_reviewed_commits: 0
+    base_branches:
+      - "^main$"
+      - "^dev(elop)?$"
+      - "^release/.*$"
+  path_instructions:
+    - path: "lib/**/*.dart"
+      instructions: |
+        Apply the Clean Code and Flutter guidelines in AGENTS.md.
+        Focus on code placed in the wrong layer, unused code left after a flow
+        changes, and regressions in loading, error handling, and navigation.
+        Keep authentication and session management out of report services.
+    - path: "lib/ui/**"
+      instructions: |
+        Check widget lifecycle, async state updates after disposal, and layout
+        on narrow screens. Check Vietnamese user-facing text and AppTheme use.
+    - path: "test/**"
+      instructions: |
+        Check that tests cover relevant regressions and assert observable behavior.
+    - path: "{android,ios}/**"
+      instructions: |
+        Check permissions, platform channel contracts, and error handling on
+        supported Android and iOS versions.
+  pre_merge_checks:
+    title:
+      mode: "warning"
+      requirements: "Use a concise Conventional Commits title under 72 characters."
+    description:
+      mode: "warning"
+  tools:
+    gitleaks:
+      enabled: true
+    semgrep:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    github-checks:
+      enabled: true
+
+chat:
+  auto_reply: true
+  art: false
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "AGENTS.md"

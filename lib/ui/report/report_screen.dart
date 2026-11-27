@@ -7,24 +7,60 @@ import '../shared/scamshield_header.dart';
 import '../shared/scamshield_navigation.dart';
 import 'report_form.dart';
 
-class ReportScreen extends StatelessWidget {
-  const ReportScreen({super.key, this.onSignOut, this.onLightModeChanged});
+class ReportScreen extends StatefulWidget {
+  const ReportScreen({
+    super.key,
+    required this.accessToken,
+    this.onSignOut,
+    this.onLightModeChanged,
+  });
 
+  final String accessToken;
   final VoidCallback? onSignOut;
   final ValueChanged<bool>? onLightModeChanged;
+
+  @override
+  State<ReportScreen> createState() => _ReportScreenState();
+}
+
+class _ReportScreenState extends State<ReportScreen> {
+  final _formKey = GlobalKey<ReportFormState>();
+
+  Future<bool> _confirmTabChange() async {
+    if (_formKey.currentState?.hasDraft != true) return true;
+
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Bỏ báo cáo đang soạn?'),
+            content: const Text(
+              'Nội dung đã nhập và tệp đính kèm sẽ bị mất khi chuyển mục.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Ở lại'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Bỏ báo cáo'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const ScamShieldHeader(),
-      endDrawer: GuestMenu(
-        onSignOut: onSignOut,
-        onLightModeChanged: onLightModeChanged,
-      ),
+      endDrawer: GuestMenu(onSignOut: widget.onSignOut),
       bottomNavigationBar: ScamShieldNavigation(
         selected: ScamShieldTab.report,
-        onSignOut: onSignOut,
-        onLightModeChanged: onLightModeChanged,
+        onSignOut: widget.onSignOut,
+        onLightModeChanged: widget.onLightModeChanged,
+        confirmTabChange: _confirmTabChange,
       ),
       body: SafeArea(
         child: Align(
@@ -56,7 +92,7 @@ class ReportScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 18),
-                const ReportForm(),
+                ReportForm(key: _formKey, accessToken: widget.accessToken),
               ],
             ),
           ),
@@ -275,3 +311,48 @@ class _ReportHero extends StatelessWidget {
     );
   }
 }
+
+Future<bool?> showReportLoginPrompt(BuildContext context) => showDialog<bool>(
+  context: context,
+  builder: (context) => AlertDialog(
+    scrollable: true,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+    icon: Center(
+      child: CircleAvatar(
+        radius: 26,
+        backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+        foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+        child: const Icon(Icons.verified_user_outlined),
+      ),
+    ),
+    title: const Text(
+      'Cần đăng nhập',
+      textAlign: TextAlign.center,
+      style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
+    ),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Vui lòng đăng nhập để gửi báo cáo.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          onPressed: () => Navigator.pop(context, true),
+          icon: const Icon(Icons.login_rounded, size: 18),
+          label: const Text('Đến trang đăng nhập', textAlign: TextAlign.center),
+        ),
+        const SizedBox(height: 4),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Hủy'),
+        ),
+      ],
+    ),
+  ),
+);

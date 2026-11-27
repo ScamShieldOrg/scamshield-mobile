@@ -36,13 +36,16 @@ enum _ReportTarget {
 }
 
 class ReportForm extends StatefulWidget {
-  const ReportForm({super.key});
+  const ReportForm({super.key, required this.accessToken});
+
+  final String accessToken;
 
   @override
-  State<ReportForm> createState() => _ReportFormState();
+  ReportFormState createState() => ReportFormState();
 }
 
-class _ReportFormState extends State<ReportForm> {
+class ReportFormState extends State<ReportForm>
+    with AutomaticKeepAliveClientMixin<ReportForm> {
   final _service = ReportService();
   final _identifier = TextEditingController();
   final _identifierFocus = FocusNode();
@@ -52,15 +55,29 @@ class _ReportFormState extends State<ReportForm> {
   final _description = TextEditingController();
   final _files = <ReportEvidence>[];
   List<ReportOption> _regions = [];
-  final List<ReportOption> _categories = const [];
+  List<ReportOption> _categories = const [];
   bool _loadingRegions = true;
   String? _regionsError;
-  final String? _token = null;
+  bool _loadingCategories = false;
+  String? _categoriesError;
+  int _categoryRequest = 0;
   String? _region;
   String? _category;
   bool _busy = false;
   _ReportTarget? _target;
   bool _confirmed = false;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  bool get hasDraft =>
+      _identifier.text.isNotEmpty ||
+      _description.text.isNotEmpty ||
+      _files.isNotEmpty ||
+      _target != null ||
+      _region != null ||
+      _category != null ||
+      _confirmed;
 
   @override
   void initState() {
@@ -71,6 +88,42 @@ class _ReportFormState extends State<ReportForm> {
       }
     });
     _loadRegions();
+    _loadCategories();
+  }
+
+  @override
+  void didUpdateWidget(covariant ReportForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.accessToken != widget.accessToken) _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    final token = widget.accessToken;
+    final request = ++_categoryRequest;
+    setState(() {
+      _category = null;
+      _categories = const [];
+      _categoriesError = null;
+      _loadingCategories = true;
+    });
+
+    try {
+      final categories = await _service.categories(token);
+      if (!mounted || request != _categoryRequest) return;
+      setState(() {
+        _categories = categories;
+        _loadingCategories = false;
+        if (categories.isEmpty) {
+          _categoriesError = 'Chưa có danh mục thủ đoạn.';
+        }
+      });
+    } on Exception {
+      if (!mounted || request != _categoryRequest) return;
+      setState(() {
+        _loadingCategories = false;
+        _categoriesError = 'Không tải được danh mục thủ đoạn.';
+      });
+    }
   }
 
   Future<void> _loadRegions() async {
@@ -270,54 +323,6 @@ class _ReportFormState extends State<ReportForm> {
     if (mounted && selected != null) setState(() => _region = selected);
   }
 
-  Future<void> _showLoginRequired() => showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      scrollable: true,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      icon: Center(
-        child: CircleAvatar(
-          radius: 26,
-          backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-          foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
-          child: const Icon(Icons.verified_user_outlined),
-        ),
-      ),
-      title: const Text(
-        'Cần đăng nhập',
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Vui lòng đăng nhập để gửi báo cáo.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.login_rounded, size: 18),
-            label: const Text(
-              'Đến trang đăng nhập',
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(height: 4),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Hủy'),
-          ),
-        ],
-      ),
-    ),
-  );
-
   Future<void> _pickEvidence() => _run(() async {
     final file = await const MethodChannel(
       'scamshield/report_evidence',
@@ -335,14 +340,13 @@ class _ReportFormState extends State<ReportForm> {
   });
 
   Future<void> _submit() async {
-    final token = _token;
+    final token = widget.accessToken;
     final target = _target;
     final region = _region;
     final category = _category;
     final identifier = _identifier.text.trim();
     final description = _description.text.trim();
     if (!_validateIdentifierBeforeSubmit()) return;
-    if (token == null) return;
     if (target == null ||
         region == null ||
         category == null ||
@@ -417,15 +421,12 @@ class _ReportFormState extends State<ReportForm> {
       _guideToTarget();
       return;
     }
-    if (_token != null) {
-      _submit();
-    } else if (_validateIdentifierBeforeSubmit()) {
-      _showLoginRequired();
-    }
+    _submit();
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final colors = Theme.of(context).colorScheme;
     final fieldFill = colors.brightness == Brightness.dark
         ? colors.surfaceContainerHigh
@@ -636,10 +637,23 @@ class _ReportFormState extends State<ReportForm> {
                     decoration: _decoration(
                       context,
                       icon: Icons.category_outlined,
+                    ).copyWith(errorText: _categoriesError, errorMaxLines: 2),
+                    hint: Text(
+                      _loadingCategories
+                          ? 'Đang tải danh mục…'
+                          : 'Chọn thủ đoạn',
+                      style: _hintStyle(context),
                     ),
-                    hint: Text('Chọn thủ đoạn', style: _hintStyle(context)),
                   ),
                 ),
+                if (_categoriesError != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: _loadCategories,
+                      child: const Text('Thử lại'),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 const _RequiredLabel('Mô tả ngắn gọn hành vi'),
                 _requireTarget(

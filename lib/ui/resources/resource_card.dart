@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../data/models/resource_entry.dart';
+import 'public_report_evidence.dart';
 import 'verified_resource_details.dart';
 
 class ResourceCard extends StatelessWidget {
@@ -283,6 +284,14 @@ class _WarningDetails extends StatelessWidget {
             ],
           ),
         ),
+        if (entry.publicEvidenceId != null ||
+            entry.publicReportDescription.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          PublicReportEvidence(
+            id: entry.publicEvidenceId,
+            behaviorDescription: entry.publicReportDescription,
+          ),
+        ],
       ],
     );
   }

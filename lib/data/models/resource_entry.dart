@@ -30,12 +30,21 @@ enum ResourceSort {
 
 class ResourceEntry {
   ResourceEntry.fromJson(Map<String, dynamic> json, ResourceList list)
-    : title =
+    : publicEvidenceId =
+          list == ResourceList.warnings &&
+              json['hasPublicImage'] == true &&
+              json['id'] is int
+          ? json['id'] as int
+          : null,
+      title =
           (json[list == ResourceList.warnings ? 'title' : 'name'] as String?) ??
           '',
       type = json['resourceType'] as String?,
       warningCategory = _text(json['categoryName']),
       warningCategoryDescription = _text(json['categoryDescription']),
+      publicReportDescription = list == ResourceList.warnings
+          ? _sourceReportDescription(json)
+          : '',
       description = json['description'] as String?,
       warnings = (json['warningCount'] as num?)?.toInt() ?? 0,
       date = DateTime.tryParse(
@@ -53,9 +62,17 @@ class ResourceEntry {
       };
 
   final String title;
+  final int? publicEvidenceId;
   final String? type;
   final String warningCategory;
   final String warningCategoryDescription;
+  final String publicReportDescription;
+
+  static String _sourceReportDescription(Map<String, dynamic> json) {
+    final report = json['sourceReport'];
+    return report is Map<String, dynamic> ? _text(report['description']) : '';
+  }
+
   final String? description;
   final int warnings;
   final DateTime? date;

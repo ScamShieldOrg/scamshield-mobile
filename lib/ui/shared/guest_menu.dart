@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/models/auth_user.dart';
 import '../education/education_screen.dart';
 import '../resources/resource_screen.dart';
 import 'scamshield_header.dart';
@@ -19,11 +20,16 @@ enum _GuestDestination {
 class GuestMenu extends StatelessWidget {
   const GuestMenu({
     super.key,
+    this.user,
+    this.onLogin,
     this.onSignOut,
     this.onLightModeChanged,
     this.isEducationOpen = false,
     this.isResourcesOpen = false,
   });
+
+  final AuthUser? user;
+  final VoidCallback? onLogin;
 
   /// Supplied only while an authenticated session is active.
   final VoidCallback? onSignOut;
@@ -60,9 +66,9 @@ class GuestMenu extends StatelessWidget {
                   background: Color(0x263BAEFF),
                   foreground: Color(0xFF89CEFF),
                 ),
-                title: const Text(
-                  'ScamShield',
-                  style: TextStyle(
+                title: Text(
+                  user?.displayName ?? 'ScamShield',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
                     fontSize: 17,
@@ -200,7 +206,15 @@ class GuestMenu extends StatelessWidget {
               FilledButton.icon(
                 icon: const Icon(Icons.login, size: 18),
                 label: const Text('Đăng nhập'),
-                onPressed: () => _openAccountInfo(context, 'Đăng nhập'),
+                onPressed: () {
+                  final login = onLogin;
+                  if (login == null) {
+                    _openAccountInfo(context, 'Đăng nhập');
+                    return;
+                  }
+                  Navigator.of(context).pop();
+                  login();
+                },
               ),
               const SizedBox(height: 6),
               OutlinedButton.icon(

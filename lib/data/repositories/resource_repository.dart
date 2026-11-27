@@ -6,6 +6,9 @@ class ResourceRepository {
 
   static const _service = ResourceService();
 
+  Future<List<String>> loadPublicEvidence(int id) =>
+      _service.fetchPublicEvidence(id);
+
   Future<ResourcePage> load({
     required ResourceList list,
     int page = 0,
