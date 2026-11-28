@@ -13,6 +13,8 @@ flutter run
 
 To run the iOS app, use macOS with Xcode installed. Run `flutter analyze` for static analysis and `flutter test` for tests.
 
+Set `API_BASE_URL` in the project-root `.env` file, for example `API_BASE_URL=https://your-backend.example/api`. Leave it empty to use the platform's local debug address. Profile and release builds require a URL. A nonempty `--dart-define=API_BASE_URL=...` overrides the file. Stop and rerun the app after changing `.env`. Keep secrets out of the file because Flutter bundles it with the app.
+
 ## Project Structure
 
 | Directory | Purpose |

@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import Vision
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, UIDocumentPickerDelegate {
@@ -41,6 +42,42 @@ import UIKit
         return
       }
       UIApplication.shared.open(url) { opened in result(opened) }
+    }
+    FlutterMethodChannel(
+      name: "scamshield/evidence_ocr",
+      binaryMessenger: registrar.messenger()
+    ).setMethodCallHandler { call, result in
+      guard call.method == "scan" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard let bytes = call.arguments as? FlutterStandardTypedData else {
+        result(FlutterError(code: "ocr", message: "Missing image", details: nil))
+        return
+      }
+      DispatchQueue.global(qos: .userInitiated).async {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        do {
+          let tokens = try NSRegularExpression(pattern: #"\S+"#)
+          try VNImageRequestHandler(data: bytes.data, options: [:]).perform([request])
+          let lines = (request.results as? [VNRecognizedTextObservation] ?? []).compactMap { observation -> [[Any]]? in
+            guard let candidate = observation.topCandidates(1).first else { return nil }
+            let text = candidate.string
+            return tokens.matches(in: text, range: NSRange(text.startIndex..<text.endIndex, in: text)).compactMap { token -> [Any]? in
+              guard let range = Range(token.range, in: text),
+                    let box = try? candidate.boundingBox(for: range)?.boundingBox else { return nil }
+              return [String(text[range]), Double(box.minX), Double(1 - box.maxY),
+                      Double(box.maxX), Double(1 - box.minY)]
+            }
+          }
+          DispatchQueue.main.async { result(lines) }
+        } catch {
+          DispatchQueue.main.async {
+            result(FlutterError(code: "ocr", message: "Text recognition failed", details: nil))
+          }
+        }
+      }
     }
     let channel = FlutterMethodChannel(
       name: "scamshield/report_evidence",
@@ -86,8 +123,14 @@ import UIKit
       do {
         let file = try FileHandle(forReadingFrom: url)
         defer { try? file.close() }
-        let bytes = try file.read(upToCount: 5 * 1024 * 1024 + 1) ?? Data()
-        guard bytes.count <= 5 * 1024 * 1024 else {
+        let maxBytes = 5 * 1024 * 1024
+        let bytes: Data
+        if #available(iOS 13.4, *) {
+          bytes = try file.read(upToCount: maxBytes + 1) ?? Data()
+        } else {
+          bytes = file.readData(ofLength: maxBytes + 1)
+        }
+        guard bytes.count <= maxBytes else {
           DispatchQueue.main.async {
             result?(FlutterError(code: "file", message: "Tệp vượt quá 5 MB.", details: nil))
           }

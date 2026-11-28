@@ -23,13 +23,6 @@ class ScamShieldApp extends StatelessWidget {
   final bool restoreSessionOnStart;
 
   @override
-  State<ScamShieldApp> createState() => _ScamShieldAppState();
-}
-
-class _ScamShieldAppState extends State<ScamShieldApp> {
-  ThemeMode _themeMode = ThemeMode.light;
-
-  @override
   Widget build(BuildContext context) {
     final repository = authRepository ?? AuthRepository();
     final quotaRepository = userQuotaRepository ?? UserQuotaRepository();
@@ -37,6 +30,10 @@ class _ScamShieldAppState extends State<ScamShieldApp> {
 
     return MultiProvider(
       providers: [
+        ListenableProvider<ValueNotifier<ThemeMode>>(
+          create: (_) => ValueNotifier(ThemeMode.light),
+          dispose: (_, mode) => mode.dispose(),
+        ),
         Provider<AuthRepository>.value(value: repository),
         Provider<UserQuotaRepository>.value(value: quotaRepository),
         Provider<DisputeRepository>.value(value: disputes),
@@ -59,11 +56,15 @@ class _ScamShieldAppState extends State<ScamShieldApp> {
           },
         ),
       ],
-      child: MaterialApp(
-        title: 'ScamShield',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        home: const HomeScreen(),
+      child: Consumer<ValueNotifier<ThemeMode>>(
+        builder: (_, mode, _) => MaterialApp(
+          title: 'ScamShield',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          themeMode: mode.value,
+          home: const HomeScreen(),
+        ),
       ),
     );
   }

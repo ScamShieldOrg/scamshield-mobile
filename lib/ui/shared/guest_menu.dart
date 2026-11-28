@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../core/theme/app_theme.dart';
+import '../../app/auth_state.dart';
 import '../../data/models/auth_user.dart';
-import 'scam_shield_brand_badge.dart';
+import '../auth/login_screen.dart';
+import '../education/education_screen.dart';
+import '../resources/resource_screen.dart';
+import 'scamshield_header.dart';
+import 'scamshield_navigation.dart';
 
 enum _GuestDestination {
-  history('Lịch Sử Kiểm Tra', Icons.history),
-  myReports('Báo Cáo Của Tôi', Icons.folder_shared_outlined),
+  history('Lịch sử kiểm tra', Icons.history),
+  myReports('Báo cáo của tôi', Icons.folder_shared_outlined),
   myAppeals('Khiếu nại của tôi', Icons.gavel_outlined);
 
   const _GuestDestination(this.title, this.icon);
@@ -21,25 +26,31 @@ class GuestMenu extends StatelessWidget {
     this.user,
     this.onLogin,
     this.onSignOut,
+    this.onLightModeChanged,
+    this.isEducationOpen = false,
+    this.isResourcesOpen = false,
   });
 
-  /// Supplied when an authenticated session is active.
   final AuthUser? user;
-
-  /// Invoked when the user chooses to sign in from the drawer.
   final VoidCallback? onLogin;
 
   /// Supplied only while an authenticated session is active.
   final VoidCallback? onSignOut;
   final ValueChanged<bool>? onLightModeChanged;
+  final bool isEducationOpen;
+  final bool isResourcesOpen;
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = user;
-    final secondaryIdentity = currentUser?.email?.isNotEmpty == true
-        ? currentUser!.email!
-        : currentUser?.phoneNumber;
-
+    final authState = context.watch<AuthState?>();
+    final isSignedIn = authState != null
+        ? authState.session != null
+        : user != null || onSignOut != null;
+    final colors = Theme.of(context).colorScheme;
+    final themeMode = context.watch<ValueNotifier<ThemeMode>?>();
+    final isLight = themeMode != null
+        ? themeMode.value == ThemeMode.light
+        : colors.brightness == Brightness.light;
     return Drawer(
       width: 292,
       shape: const RoundedRectangleBorder(
@@ -51,25 +62,23 @@ class GuestMenu extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
           children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: ScamShieldBrandBadge(),
-            ),
-            const SizedBox(height: 8),
-            const Divider(),
-            for (final destination in _GuestDestination.values)
-              ListTile(
-                leading: Icon(destination.icon),
-                title: Text(destination.title),
-                selected: destination == _GuestDestination.check,
-                selectedColor: Colors.white,
-                selectedTileColor: AppTheme.navy,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF0B132B), Color(0xFF194984)],
                 ),
-                title: const Text(
-                  'ScamShield',
-                  style: TextStyle(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                leading: const _MenuIcon(
+                  icon: Icons.verified_user_outlined,
+                  background: Color(0x263BAEFF),
+                  foreground: Color(0xFF89CEFF),
+                ),
+                title: Text(
+                  user?.displayName ?? 'ScamShield',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
                     fontSize: 17,
@@ -91,33 +100,82 @@ class GuestMenu extends StatelessWidget {
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
+                  ListTile(
+                    leading: const _MenuIcon(icon: Icons.manage_search_rounded),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+                    title: const Text('Tra cứu tài nguyên'),
+                    selected: isResourcesOpen,
+                    onTap: () {
+                      final navigator = Navigator.of(context);
+                      navigator.pop();
+                      if (isResourcesOpen) return;
+                      final route = MaterialPageRoute<void>(
+                        builder: (_) => ResourceScreen(
+                          onSignOut: onSignOut,
+                          onLightModeChanged: onLightModeChanged,
+                        ),
+                      );
+                      if (isEducationOpen) {
+                        navigator.pushReplacement(route);
+                      } else {
+                        navigator.push(route);
+                      }
+                    },
+                  ),
+                  ListTile(
+                    leading: const _MenuIcon(icon: Icons.menu_book_outlined),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+                    title: const Text('Cẩm nang an toàn'),
+                    selected: isEducationOpen,
+                    onTap: () {
+                      final navigator = Navigator.of(context);
+                      navigator.pop();
+                      if (isEducationOpen) return;
+                      final route = MaterialPageRoute<void>(
+                        builder: (_) => EducationScreen(
+                          onSignOut: onSignOut,
+                          onLightModeChanged: onLightModeChanged,
+                        ),
+                      );
+                      if (isResourcesOpen) {
+                        navigator.pushReplacement(route);
+                      } else {
+                        navigator.push(route);
+                      }
+                    },
+                  ),
                   for (final destination in _GuestDestination.values)
+                    if (isSignedIn || destination == _GuestDestination.history)
+                      ListTile(
+                        leading: _MenuIcon(icon: destination.icon),
+                        trailing: const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 18,
+                        ),
+                        title: Text(destination.title),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        onTap: () =>
+                            _openSection(context, destination.title, const [
+                              (
+                                'Tính năng đang được chuẩn bị',
+                                'Mục này chưa khả dụng trên ứng dụng di động.',
+                              ),
+                            ]),
+                      ),
+                  if (isSignedIn)
                     ListTile(
-                      leading: _MenuIcon(icon: destination.icon),
+                      leading: const _MenuIcon(
+                        icon: Icons.person_outline_rounded,
+                      ),
                       trailing: const Icon(
                         Icons.chevron_right_rounded,
                         size: 18,
                       ),
-                      title: Text(destination.title),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      onTap: () =>
-                          _openSection(context, destination.title, const [
-                            (
-                              'Tính năng đang được chuẩn bị',
-                              'Mục này chưa khả dụng trên ứng dụng di động.',
-                            ),
-                          ]),
+                      title: const Text('Tài khoản'),
+                      onTap: () => _openAccountInfo(context, 'Tài khoản'),
                     ),
-                  ListTile(
-                    leading: const _MenuIcon(
-                      icon: Icons.person_outline_rounded,
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded, size: 18),
-                    title: const Text('Tài khoản'),
-                    onTap: () => _openAccountInfo(context, 'Tài khoản'),
-                  ),
                 ],
               ),
             ),
@@ -144,96 +202,58 @@ class GuestMenu extends StatelessWidget {
                   ),
                 ),
                 value: isLight,
-                onChanged: onLightModeChanged,
+                onChanged: themeMode == null
+                    ? onLightModeChanged
+                    : (enabled) => themeMode.value = enabled
+                          ? ThemeMode.light
+                          : ThemeMode.dark,
               ),
             ),
-            if (currentUser != null) ...[
-              Container(
-                margin: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.page,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.border),
+            const SizedBox(height: 14),
+            if (isSignedIn)
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: colors.error,
+                  backgroundColor: colors.errorContainer.withValues(alpha: .22),
+                  side: BorderSide(color: colors.error.withValues(alpha: .35)),
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      currentUser.displayName,
-                      style: const TextStyle(
-                        fontFamily: 'sans-serif',
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.ink,
-                      ),
-                    ),
-                    if (secondaryIdentity != null &&
-                        secondaryIdentity != currentUser.displayName) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        secondaryIdentity,
-                        style: const TextStyle(
-                          fontFamily: 'sans-serif',
-                          fontSize: 12.5,
-                          color: AppTheme.mutedInk,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppTheme.muted,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        currentUser.roleLabel,
-                        style: const TextStyle(
-                          fontFamily: 'sans-serif',
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.navy,
-                        ),
-                      ),
-                    ),
-                  ],
+                icon: const Icon(Icons.logout_rounded, size: 20),
+                label: Text(
+                  authState?.isBusy == true ? 'Đang đăng xuất…' : 'Đăng xuất',
                 ),
-              ),
-            ],
-            if (onSignOut case final signOut?)
-              ListTile(
-                textColor: colors.error,
-                iconColor: colors.error,
-                leading: const Icon(Icons.logout),
-                title: const Text('Đăng xuất'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  signOut();
-                },
+                onPressed:
+                    authState?.isBusy == true ||
+                        (authState == null && onSignOut == null)
+                    ? null
+                    : () => _confirmSignOut(context, authState),
               )
             else ...[
-              ListTile(
-                leading: const Icon(Icons.login),
-                title: const Text('Đăng nhập'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  if (onLogin != null) {
-                    onLogin!();
+              FilledButton.icon(
+                icon: const Icon(Icons.login, size: 18),
+                label: const Text('Đăng nhập'),
+                onPressed: () {
+                  final navigator = Navigator.of(context);
+                  final login = onLogin;
+                  navigator.pop();
+                  if (login == null) {
+                    navigator.push<bool>(
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    );
                   } else {
-                    _openAccountInfo(context, 'Đăng nhập');
+                    login();
                   }
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.person_add_alt_outlined),
-                title: const Text('Tạo tài khoản miễn phí'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _openAccountInfo(context, 'Tạo tài khoản miễn phí');
-                },
+              const SizedBox(height: 6),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.person_add_alt_outlined, size: 18),
+                label: const Text('Tạo tài khoản miễn phí'),
+                onPressed: () =>
+                    _openAccountInfo(context, 'Tạo tài khoản miễn phí'),
               ),
             ],
           ],
@@ -242,17 +262,92 @@ class GuestMenu extends StatelessWidget {
     );
   }
 
+  Future<void> _confirmSignOut(
+    BuildContext context,
+    AuthState? authState,
+  ) async {
+    final navigator = Navigator.of(context);
+    final scaffold = Scaffold.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final colors = Theme.of(dialogContext).colorScheme;
+        return AlertDialog(
+          scrollable: true,
+          icon: Icon(Icons.logout_rounded, color: colors.error),
+          title: const Text('Đăng xuất?'),
+          content: const Text('Bạn có chắc muốn đăng xuất'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Hủy'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: colors.error,
+                foregroundColor: colors.onError,
+              ),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Đăng xuất'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !context.mounted || authState?.isBusy == true) {
+      return;
+    }
+
+    try {
+      if (authState != null) {
+        await authState.signOut();
+      } else {
+        onSignOut?.call();
+      }
+    } catch (_) {
+      if (messenger.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Không xóa được phiên đăng nhập đã lưu.'),
+          ),
+        );
+      }
+    }
+    if (!navigator.mounted) return;
+    if (scaffold.mounted) {
+      if (scaffold.isEndDrawerOpen) scaffold.closeEndDrawer();
+      if (scaffold.isDrawerOpen) scaffold.closeDrawer();
+    }
+    navigator.pushAndRemoveUntil<bool>(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => route.isFirst,
+    );
+  }
+
   void _openAccountInfo(BuildContext context, String title) {
-    Navigator.of(context).push<void>(
+    _openSection(context, title, const [
+      (
+        'Chưa kết nối tài khoản',
+        'Ứng dụng di động chưa kết nối dịch vụ tài khoản. Bạn vẫn có thể sử dụng chế độ khách.',
+      ),
+    ]);
+  }
+
+  void _openSection(
+    BuildContext context,
+    String title,
+    List<(String, String)> cards,
+  ) {
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    navigator.push<void>(
       MaterialPageRoute(
         builder: (_) => _SectionPage(
           title: title,
-          cards: const [
-            (
-              'Tính năng đang phát triển',
-              'Màn hình tạo tài khoản trên di động đang được hoàn thiện. Bạn có thể đăng nhập bằng tài khoản đã có hoặc dùng chế độ khách.',
-            ),
-          ],
+          cards: cards,
+          onSignOut: onSignOut,
+          onLightModeChanged: onLightModeChanged,
         ),
       ),
     );

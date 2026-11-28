@@ -187,14 +187,13 @@ void main() {
       );
 
       await tester.pumpWidget(
-        ScamShieldApp(
-          authRepository: repository,
-          restoreSessionOnStart: false,
-        ),
+        ScamShieldApp(authRepository: repository, restoreSessionOnStart: false),
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const ValueKey('home_login_action')));
+      await tester.tap(find.text('Menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Đăng nhập'));
       await tester.pumpAndSettle();
 
       expect(find.text('Ghi nhớ đăng nhập'), findsOneWidget);
@@ -242,14 +241,13 @@ void main() {
       );
 
       await tester.pumpWidget(
-        ScamShieldApp(
-          authRepository: repository,
-          restoreSessionOnStart: false,
-        ),
+        ScamShieldApp(authRepository: repository, restoreSessionOnStart: false),
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const ValueKey('home_login_action')));
+      await tester.tap(find.text('Menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Đăng nhập'));
       await tester.pumpAndSettle();
 
       await tester.enterText(
@@ -501,10 +499,7 @@ void main() {
             .toList();
         expect(subtitles, hasLength(2));
         expect(subtitles[0].style?.color, AppTheme.mutedInk);
-        expect(
-          subtitles[1].style?.color,
-          Colors.white.withValues(alpha: 0.68),
-        );
+        expect(subtitles[1].style?.color, Colors.white.withValues(alpha: 0.68));
       },
     );
   });

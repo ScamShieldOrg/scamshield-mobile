@@ -28,9 +28,24 @@ abstract final class AppTheme {
   static const mutedInk = Color(0xFF565E6B);
   static const border = Color(0xFFE2E8F0);
   static const error = Color(0xFFBA1A1A);
+  static const evidenceMaskRed = Color(0xFFFF2020);
   static const errorSurface = Color(0xFFFEF2F2);
   static const errorBorder = Color(0xFFFECACA);
   static const accentAmber = Color(0xFFF59E0B);
+
+  static ({Color foreground, Color background, Color border}) verifiedColors(
+    Brightness brightness,
+  ) => brightness == Brightness.dark
+      ? (
+          foreground: const Color(0xFF6EE7B7),
+          background: const Color(0xFF123329),
+          border: const Color(0xFF235D49),
+        )
+      : (
+          foreground: const Color(0xFF047857),
+          background: const Color(0xFFECFDF5),
+          border: const Color(0xFFA7F3D0),
+        );
 
   static final ThemeData light = ThemeData(
     colorScheme: const ColorScheme.light(

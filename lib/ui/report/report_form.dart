@@ -5,6 +5,9 @@ import 'package:flutter/services.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../data/services/report_service.dart';
+import 'evidence_image_editor.dart';
+import 'evidence_image_redaction.dart';
+import 'report_evidence_tile.dart';
 import 'report_target_validation.dart';
 
 enum _ReportTarget {
@@ -36,15 +39,21 @@ enum _ReportTarget {
 }
 
 class ReportForm extends StatefulWidget {
-  const ReportForm({super.key, this.accessToken});
+  const ReportForm({
+    super.key,
+    required this.accessToken,
+    this.onShowPrivacyNotice,
+  });
 
-  final String? accessToken;
+  final String accessToken;
+  final VoidCallback? onShowPrivacyNotice;
 
   @override
-  State<ReportForm> createState() => _ReportFormState();
+  ReportFormState createState() => ReportFormState();
 }
 
-class _ReportFormState extends State<ReportForm> {
+class ReportFormState extends State<ReportForm>
+    with AutomaticKeepAliveClientMixin<ReportForm> {
   final _service = ReportService();
   final _identifier = TextEditingController();
   final _identifierFocus = FocusNode();
@@ -52,10 +61,13 @@ class _ReportFormState extends State<ReportForm> {
   Timer? _identifierDebounce;
   bool _attemptedSubmit = false;
   final _description = TextEditingController();
-  final _files = <ReportEvidence>[];
+  final _files =
+      <
+        ({ReportEvidence original, ReportEvidence evidence, List<Rect> masks})
+      >[];
   List<ReportOption> _regions = [];
   List<ReportOption> _categories = const [];
-  bool _loadingRegions = true;
+  bool _loadingRegions = false;
   String? _regionsError;
   bool _loadingCategories = false;
   String? _categoriesError;
@@ -65,6 +77,18 @@ class _ReportFormState extends State<ReportForm> {
   bool _busy = false;
   _ReportTarget? _target;
   bool _confirmed = false;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  bool get hasDraft =>
+      _identifier.text.isNotEmpty ||
+      _description.text.isNotEmpty ||
+      _files.isNotEmpty ||
+      _target != null ||
+      _region != null ||
+      _category != null ||
+      _confirmed;
 
   @override
   void initState() {
@@ -91,9 +115,8 @@ class _ReportFormState extends State<ReportForm> {
       _category = null;
       _categories = const [];
       _categoriesError = null;
-      _loadingCategories = token != null;
+      _loadingCategories = true;
     });
-    if (token == null) return;
 
     try {
       final categories = await _service.categories(token);
@@ -115,6 +138,8 @@ class _ReportFormState extends State<ReportForm> {
   }
 
   Future<void> _loadRegions() async {
+    if (_loadingRegions) return;
+    setState(() => _loadingRegions = true);
     try {
       final regions = await _service.regions();
       if (mounted) {
@@ -145,10 +170,41 @@ class _ReportFormState extends State<ReportForm> {
     super.dispose();
   }
 
-  void _message(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+  void _message(String message, {bool success = false}) {
+    final displayMessage = message.replaceAllMapped(
+      RegExp(r'#?\bRPT-0*([0-9]+)\b', caseSensitive: false),
+      (match) => match[1]!,
+    );
+    final theme = Theme.of(context);
+    final verified = AppTheme.verifiedColors(theme.brightness);
+    final background = success
+        ? verified.background
+        : theme.colorScheme.errorContainer;
+    final foreground = success
+        ? verified.foreground
+        : theme.colorScheme.onErrorContainer;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          backgroundColor: background,
+          content: Row(
+            children: [
+              Icon(
+                success ? Icons.check_circle_outline : Icons.error_outline,
+                color: foreground,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  displayMessage,
+                  style: TextStyle(color: foreground),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
   }
 
   final _targetStepKey = GlobalKey();
@@ -311,54 +367,6 @@ class _ReportFormState extends State<ReportForm> {
     if (mounted && selected != null) setState(() => _region = selected);
   }
 
-  Future<void> _showLoginRequired() => showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      scrollable: true,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      icon: Center(
-        child: CircleAvatar(
-          radius: 26,
-          backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-          foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
-          child: const Icon(Icons.verified_user_outlined),
-        ),
-      ),
-      title: const Text(
-        'Cần đăng nhập',
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Vui lòng đăng nhập để gửi báo cáo.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.login_rounded, size: 18),
-            label: const Text(
-              'Đến trang đăng nhập',
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(height: 4),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Hủy'),
-          ),
-        ],
-      ),
-    ),
-  );
-
   Future<void> _pickEvidence() => _run(() async {
     final file = await const MethodChannel(
       'scamshield/report_evidence',
@@ -367,13 +375,42 @@ class _ReportFormState extends State<ReportForm> {
     final name = file['name'] as String;
     final bytes = file['bytes'] as Uint8List;
     if (bytes.isEmpty ||
-        bytes.length > 5 * 1024 * 1024 ||
+        bytes.length > maxReportEvidenceBytes ||
         !RegExp(r'\.(png|jpe?g|pdf)$', caseSensitive: false).hasMatch(name)) {
       _message('Chọn tệp PNG, JPG hoặc PDF không quá 5 MB.');
       return;
     }
-    setState(() => _files.add((name: name, bytes: bytes)));
+    final evidence = (name: name, bytes: bytes);
+    setState(
+      () =>
+          _files.add((original: evidence, evidence: evidence, masks: const [])),
+    );
   });
+
+  Future<void> _editEvidence(int index) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final file = _files[index];
+    final edit = await Navigator.of(context).push<EvidenceImageEdit>(
+      MaterialPageRoute(
+        builder: (_) => EvidenceImageEditor(
+          name: file.original.name,
+          bytes: file.original.bytes,
+          initialMasks: file.masks,
+        ),
+      ),
+    );
+    if (!mounted || edit == null) return;
+    final name = edit.masks.isEmpty
+        ? file.original.name
+        : file.original.name.replaceFirst(RegExp(r'\.[^.]+$'), '.png');
+    setState(
+      () => _files[index] = (
+        original: file.original,
+        evidence: (name: name, bytes: edit.bytes),
+        masks: edit.masks,
+      ),
+    );
+  }
 
   Future<void> _submit() async {
     final token = widget.accessToken;
@@ -383,7 +420,6 @@ class _ReportFormState extends State<ReportForm> {
     final identifier = _identifier.text.trim();
     final description = _description.text.trim();
     if (!_validateIdentifierBeforeSubmit()) return;
-    if (token == null) return;
     if (target == null ||
         region == null ||
         category == null ||
@@ -397,18 +433,22 @@ class _ReportFormState extends State<ReportForm> {
       return;
     }
     await _run(() async {
-      final code = await _service.submit(token, {
-        'threatType': switch (target) {
-          _ReportTarget.phone => 'PHONE',
-          _ReportTarget.website => 'URL',
-          _ReportTarget.bank => 'BANK_ACCOUNT',
+      final code = await _service.submit(
+        token,
+        {
+          'threatType': switch (target) {
+            _ReportTarget.phone => 'PHONE',
+            _ReportTarget.website => 'URL',
+            _ReportTarget.bank => 'BANK_ACCOUNT',
+          },
+          'targetIdentifier': identifier,
+          'regionCode': region,
+          'category': category,
+          'description': description,
+          'isConfirmed': true,
         },
-        'targetIdentifier': identifier,
-        'regionCode': region,
-        'category': category,
-        'description': description,
-        'isConfirmed': true,
-      }, List.of(_files));
+        [for (final file in _files) file.evidence],
+      );
       if (!mounted) return;
       _identifier.clear();
       _description.clear();
@@ -422,7 +462,10 @@ class _ReportFormState extends State<ReportForm> {
         _region = null;
         _category = null;
       });
-      _message('Đã gửi báo cáo $code. Vui lòng theo dõi kết quả kiểm duyệt.');
+      _message(
+        'Đã gửi báo cáo $code. Vui lòng theo dõi kết quả kiểm duyệt.',
+        success: true,
+      );
     });
   }
 
@@ -458,15 +501,12 @@ class _ReportFormState extends State<ReportForm> {
       _guideToTarget();
       return;
     }
-    if (widget.accessToken != null) {
-      _submit();
-    } else if (_validateIdentifierBeforeSubmit()) {
-      _showLoginRequired();
-    }
+    _submit();
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final colors = Theme.of(context).colorScheme;
     final fieldFill = colors.brightness == Brightness.dark
         ? colors.surfaceContainerHigh
@@ -655,12 +695,21 @@ class _ReportFormState extends State<ReportForm> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (_regionsError != null)
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TextButton(
+                      onPressed: _loadingRegions || _busy ? null : _loadRegions,
+                      child: const Text('Thử lại tải tỉnh/thành'),
+                    ),
+                  ),
                 const _RequiredLabel('Danh mục thủ đoạn'),
                 _requireTarget(
                   DropdownButtonFormField<String>(
                     key: ValueKey(('category', _category)),
                     initialValue: _category,
                     isExpanded: true,
+                    style: Theme.of(context).textTheme.bodyLarge,
                     items: [
                       for (final option in _categories)
                         DropdownMenuItem(
@@ -733,17 +782,14 @@ class _ReportFormState extends State<ReportForm> {
                     label: Text('Chọn tệp minh chứng'),
                   ),
                 ),
-                for (final file in _files)
-                  ListTile(
-                    dense: true,
-                    title: Text(file.name),
-                    trailing: IconButton(
-                      tooltip: 'Xóa tệp',
-                      onPressed: _busy
-                          ? null
-                          : () => setState(() => _files.remove(file)),
-                      icon: const Icon(Icons.close),
-                    ),
+                for (var index = 0; index < _files.length; index++)
+                  ReportEvidenceTile(
+                    file: _files[index].evidence,
+                    redacted: _files[index].masks.isNotEmpty,
+                    onEdit: _busy ? null : () => _editEvidence(index),
+                    onRemove: _busy
+                        ? null
+                        : () => setState(() => _files.removeAt(index)),
                   ),
                 const SizedBox(height: 6),
                 _ReportNotice(
@@ -758,9 +804,10 @@ class _ReportFormState extends State<ReportForm> {
                   icon: Icons.lock_outline,
                   color: colors.primary,
                   background: panelFill,
+                  onLearnMore: widget.onShowPrivacyNotice,
                   content: const TextSpan(
                     text:
-                        'Hãy che thông tin cá nhân không liên quan trước khi tải tệp lên.',
+                        'Che thông tin cá nhân không liên quan trên ảnh đính kèm. Với PDF, hãy che thông tin trước khi chọn tệp.',
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -912,12 +959,14 @@ class _ReportNotice extends StatelessWidget {
     required this.color,
     required this.content,
     this.background,
+    this.onLearnMore,
   });
 
   final IconData icon;
   final Color color;
   final TextSpan content;
   final Color? background;
+  final VoidCallback? onLearnMore;
 
   @override
   Widget build(BuildContext context) {
@@ -927,13 +976,29 @@ class _ReportNotice extends StatelessWidget {
         Icon(icon, size: 18, color: color),
         const SizedBox(width: 8),
         Expanded(
-          child: Text.rich(
-            content,
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.4,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text.rich(
+                content,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  height: 1.4,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (onLearnMore case final learnMore?) ...[
+                const SizedBox(height: 8),
+                FilledButton.tonalIcon(
+                  onPressed: learnMore,
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                  label: const Text('Bảo vệ thông tin Zero-PII'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ],

@@ -46,6 +46,7 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
   };
   TextEditingController get _controller => _drafts[_type]!;
   final _formKey = GlobalKey<FormState>();
+  final _resultKey = GlobalKey();
   _CheckType _type = _CheckType.message;
   final _repository = ScamCheckRepository();
   ScamCheckQuota? _quota;
@@ -184,7 +185,19 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
       var restoreSession = false;
       try {
         final result = await _repository.analyze(type, input);
-        if (mounted) setState(() => _result = result);
+        if (mounted) {
+          setState(() => _result = result);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final resultContext = _resultKey.currentContext;
+            if (resultContext == null || !identical(_result, result)) return;
+            Scrollable.ensureVisible(
+              resultContext,
+              duration: const Duration(milliseconds: 350),
+              alignment: 0.08,
+              curve: Curves.easeOut,
+            );
+          });
+        }
       } on ScamCheckApiException catch (error) {
         restoreSession = error.statusCode == 401;
         if (mounted) setState(() => _scanError = error.message);
@@ -532,7 +545,11 @@ class _ScamCheckCardState extends State<ScamCheckCard> {
               ],
               if (result != null) ...[
                 const SizedBox(height: 16),
-                ScamCheckResultCard(result: result, inputLabel: _type.label),
+                ScamCheckResultCard(
+                  key: _resultKey,
+                  result: result,
+                  inputLabel: _type.label,
+                ),
               ],
             ],
           ),

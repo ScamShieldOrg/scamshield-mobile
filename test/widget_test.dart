@@ -4,7 +4,7 @@ import 'package:scamshield_mobile/main.dart' as app;
 
 void main() {
   testWidgets('launches the ScamShield home screen', (tester) async {
-    app.main();
+    await tester.runAsync(app.main);
     await tester.pumpAndSettle();
 
     expect(find.text('ScamShield'), findsOneWidget);

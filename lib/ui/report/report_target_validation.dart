@@ -97,7 +97,15 @@ String? reportTargetTypeWarning(ReportTargetType? selected, String input) {
       .where((type) => type != selected && matchesReportTarget(type, value))
       .map((type) => type.label)
       .join(' hoặc ');
-  if (candidates.isEmpty) return null;
+  if (candidates.isEmpty) {
+    return switch (selected) {
+      ReportTargetType.phone => 'Số điện thoại chưa đúng định dạng.',
+      ReportTargetType.website =>
+        'Đường dẫn hoặc tên miền chưa đúng định dạng.',
+      ReportTargetType.bank =>
+        'Số tài khoản ngân hàng phải có từ 6 đến 30 chữ số.',
+    };
+  }
   return 'Dữ liệu đã nhập có thể thuộc loại $candidates. '
       'Vui lòng kiểm tra lại loại đối tượng báo cáo.';
 }

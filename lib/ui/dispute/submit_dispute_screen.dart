@@ -11,9 +11,9 @@ import '../../data/models/api_exception.dart';
 import '../../data/repositories/dispute_repository.dart';
 import '../auth/login_screen.dart';
 import '../shared/ai_quota_banner.dart';
-import '../shared/user_app_bar.dart';
-import '../shared/user_bottom_nav.dart';
-import '../shared/user_sidebar_drawer.dart';
+import '../shared/guest_menu.dart';
+import '../shared/scamshield_header.dart';
+import '../shared/scamshield_navigation.dart';
 import 'dispute_tracking_screen.dart';
 import 'submit_dispute_validation.dart';
 
@@ -39,8 +39,8 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
   final _indicatorController = TextEditingController();
   final _reasonController = TextEditingController();
 
-  bool _isLightMode = true;
   bool _isSubmitting = false;
+  int _submissionAttempt = 0;
   int? _submittedDisputeCount;
   DisputeIndicatorType _indicatorType = DisputeIndicatorType.phone;
   DisputeLegalRelationship _legalRelationship =
@@ -124,40 +124,8 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
     }
   }
 
-  void _handleSidebarNavigation(UserSidebarDestination destination) {
-    if (destination == UserSidebarDestination.dispute) {
-      return;
-    }
-    if (destination == UserSidebarDestination.scamCheck) {
-      final navigator = Navigator.of(context);
-      if (navigator.canPop()) {
-        navigator.pop();
-      }
-      return;
-    }
-    _showNotice('Mục "${destination.title}" trên di động đang được phát triển.');
-  }
-
-  void _handleBottomNavTap(UserBottomNavTab tab) {
-    if (tab == UserBottomNavTab.check) {
-      final navigator = Navigator.of(context);
-      if (navigator.canPop()) {
-        navigator.pop();
-      }
-      return;
-    }
-    final label = switch (tab) {
-      UserBottomNavTab.check => 'Kiểm tra',
-      UserBottomNavTab.history => 'Lịch sử',
-      UserBottomNavTab.report => 'Gửi báo cáo mới',
-      UserBottomNavTab.news => 'Tin tức & Thông báo',
-      UserBottomNavTab.account => 'Tài khoản',
-    };
-    _showNotice('Tính năng "$label" trên di động đang được phát triển.');
-  }
-
   Future<List<PickedDisputeFile>?> _defaultPickFiles() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: allowedDisputeFileExtensions.toList(growable: false),
       allowMultiple: true,
@@ -188,6 +156,7 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
       return;
     }
 
+    final submissionAttempt = _submissionAttempt;
     List<PickedDisputeFile>? picked;
     try {
       final picker = widget.attachmentPicker ?? _defaultPickFiles;
@@ -200,7 +169,10 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
       return;
     }
 
-    if (!mounted || picked == null || picked.isEmpty) {
+    if (!mounted ||
+        submissionAttempt != _submissionAttempt ||
+        picked == null ||
+        picked.isEmpty) {
       return;
     }
 
@@ -285,6 +257,7 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
     FocusScope.of(context).unfocus();
     setState(() {
       _isSubmitting = true;
+      _submissionAttempt++;
       _submitError = null;
     });
 
@@ -361,50 +334,28 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
       data: pageTheme,
       child: Scaffold(
         backgroundColor: AppTheme.page,
-        drawer: isRegisteredUser
-            ? UserSidebarDrawer(
-                activeDestination: UserSidebarDestination.dispute,
-                unreadNotificationCount: 3,
-                isLightMode: _isLightMode,
-                onLightModeChanged: (value) {
-                  setState(() => _isLightMode = value);
-                },
-                onSelectDestination: _handleSidebarNavigation,
-                onSignOut: authState != null
-                    ? () => _handleSignOut(authState)
-                    : null,
-              )
-            : null,
-        appBar: isRegisteredUser
-            ? UserAppBar(
-                user: user,
-                unreadNotificationCount: 3,
-                onNotificationsTap: () => _showNotice(
-                  'Mục "Thông Báo" trên di động đang được phát triển.',
-                ),
-              )
-            : AppBar(
-                title: const Text(
-                  'Khiếu Nại & Gỡ Nhãn Sai',
-                  style: TextStyle(
-                    fontFamily: 'sans-serif',
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
+        appBar: const ScamShieldHeader(),
+        endDrawer: GuestMenu(
+          user: user,
+          onLogin: () => Navigator.of(
+            context,
+          ).push<bool>(MaterialPageRoute(builder: (_) => const LoginScreen())),
+          onSignOut: authState != null && user != null
+              ? () => _handleSignOut(authState)
+              : null,
+        ),
         body: SafeArea(
           top: false,
           child: isRegisteredUser
               ? _buildRegisteredUserBody()
               : _buildAccessRestrictedBody(user != null),
         ),
-        bottomNavigationBar: isRegisteredUser
-            ? UserBottomNav(
-                activeTab: null,
-                hasNewsDot: true,
-                onSelectTab: _handleBottomNavTap,
-              )
-            : null,
+        bottomNavigationBar: ScamShieldNavigation(
+          selected: ScamShieldTab.appeal,
+          onSignOut: authState != null && user != null
+              ? () => _handleSignOut(authState)
+              : null,
+        ),
       ),
     );
   }
@@ -560,7 +511,13 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
               const SizedBox(height: 18),
               _buildSegmentedTabs(),
               const SizedBox(height: 16),
-              _buildDisputeFormCard(),
+              ExcludeFocus(
+                excluding: _isSubmitting,
+                child: AbsorbPointer(
+                  absorbing: _isSubmitting,
+                  child: _buildDisputeFormCard(),
+                ),
+              ),
               const SizedBox(height: 14),
               _buildImportantNotesCard(),
             ],
@@ -829,7 +786,9 @@ class _SubmitDisputeScreenState extends State<SubmitDisputeScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _buildRequiredLabel('4. Lý do khiếu nại & giải trình'),
+                    child: _buildRequiredLabel(
+                      '4. Lý do khiếu nại & giải trình',
+                    ),
                   ),
                   Text(
                     '$reasonLength/$maxDisputeReasonLength ký tự',
