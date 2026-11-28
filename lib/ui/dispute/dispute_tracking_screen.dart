@@ -34,13 +34,13 @@ class _DisputeTrackingScreenState extends State<DisputeTrackingScreen> {
   static const _topBarRed = Color(0xFFFECACA);
 
   late final DisputeTrackingViewModel _viewModel;
-  bool _isLightMode = true;
   String? _loadedAccessToken;
 
   @override
   void initState() {
     super.initState();
-    final repository = context.read<DisputeRepository?>() ?? DisputeRepository();
+    final repository =
+        context.read<DisputeRepository?>() ?? DisputeRepository();
     _viewModel = DisputeTrackingViewModel(disputeRepository: repository);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -117,7 +117,9 @@ class _DisputeTrackingScreenState extends State<DisputeTrackingScreen> {
       }
       return;
     }
-    _showNotice('Mục "${destination.title}" trên di động đang được phát triển.');
+    _showNotice(
+      'Mục "${destination.title}" trên di động đang được phát triển.',
+    );
   }
 
   void _handleBottomNavTap(UserBottomNavTab tab) {
@@ -325,6 +327,7 @@ class _DisputeTrackingScreenState extends State<DisputeTrackingScreen> {
   @override
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
+    final themeMode = context.watch<ValueNotifier<ThemeMode>?>();
     final pageTheme = baseTheme.copyWith(
       textTheme: baseTheme.textTheme.apply(fontFamily: 'sans-serif'),
     );
@@ -350,15 +353,19 @@ class _DisputeTrackingScreenState extends State<DisputeTrackingScreen> {
       child: Theme(
         data: pageTheme,
         child: Scaffold(
-          backgroundColor: AppTheme.page,
+          backgroundColor: pageTheme.scaffoldBackgroundColor,
           drawer: isRegisteredUser
               ? UserSidebarDrawer(
                   activeDestination: UserSidebarDestination.dispute,
                   unreadNotificationCount: 3,
-                  isLightMode: _isLightMode,
-                  onLightModeChanged: (value) {
-                    setState(() => _isLightMode = value);
-                  },
+                  isLightMode: themeMode != null
+                      ? themeMode.value == ThemeMode.light
+                      : baseTheme.brightness == Brightness.light,
+                  onLightModeChanged: themeMode == null
+                      ? null
+                      : (enabled) => themeMode.value = enabled
+                            ? ThemeMode.light
+                            : ThemeMode.dark,
                   onSelectDestination: _handleSidebarNavigation,
                   onSignOut: authState != null
                       ? () => _handleSignOut(authState)
@@ -703,10 +710,7 @@ class _DisputeTrackingScreenState extends State<DisputeTrackingScreen> {
           Expanded(
             child: Container(
               key: const ValueKey('tracking_tab_progress'),
-              padding: const EdgeInsets.symmetric(
-                vertical: 11,
-                horizontal: 8,
-              ),
+              padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 8),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(11),
@@ -1120,11 +1124,7 @@ class _DisputeTrackingScreenState extends State<DisputeTrackingScreen> {
               ),
             ),
             const SizedBox(width: 6),
-            const Icon(
-              Icons.verified_outlined,
-              size: 18,
-              color: AppTheme.blue,
-            ),
+            const Icon(Icons.verified_outlined, size: 18, color: AppTheme.blue),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

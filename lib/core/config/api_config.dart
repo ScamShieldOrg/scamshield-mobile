@@ -1,55 +1,58 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 abstract final class ApiConfig {
   static const _configuredBase = String.fromEnvironment('API_BASE_URL');
   static const _androidDebugBase = 'http://10.0.2.2:8080/api';
+  static String _assetBase = '';
 
-  static Uri endpoint(String path) {
-    final address =
-        _configuredBase.isEmpty &&
-            kDebugMode &&
-            !kIsWeb &&
-            defaultTargetPlatform == TargetPlatform.android
-        ? _androidDebugBase
-        : _configuredBase;
-    final base = Uri.tryParse(address);
-    if (base == null ||
-        !['http', 'https'].contains(base.scheme) ||
-        base.host.isEmpty) {
-      throw const FormatException('Chưa cấu hình API_BASE_URL cho ứng dụng.');
-    }
-    return base.replace(
-      path: '${base.path.replaceFirst(RegExp(r'/$'), '')}$path',
-    );
+  static Future<void> load() async {
+    final contents = await rootBundle.loadString('.env');
+    final entry = RegExp(r'^ *API_BASE_URL *=([^\r\n]*)', multiLine: true);
+    _assetBase = entry.firstMatch(contents)?.group(1)?.trim() ?? '';
   }
+
+  static Uri endpoint(String path) => resolve(path);
 
   /// Base URL of the ScamShield Core REST API (including `/api`).
   ///
-  /// Override at runtime with:
-  /// `flutter run --dart-define=API_BASE_URL=http://<host>:8080/api`
-  static String get baseUrl {
-    if (_configuredBase.trim().isNotEmpty) {
-      return _normalizeBaseUrl(_configuredBase);
-    }
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:8080/api';
-    }
-    return 'http://localhost:8080/api';
-  }
+  /// Set in `.env` or override with `--dart-define=API_BASE_URL=...`.
+  static String get baseUrl => _validatedBase().toString();
 
   static Uri resolve(String path, {String? baseUrlOverride}) {
-    final base = _normalizeBaseUrl(baseUrlOverride ?? baseUrl);
-    var cleanPath = path.startsWith('/') ? path : '/$path';
-    if (base.endsWith('/api') && cleanPath.startsWith('/api/')) {
+    final base = _validatedBase(baseUrlOverride);
+    final request = Uri.parse(path.startsWith('/') ? path : '/$path');
+    var cleanPath = request.path;
+    if (base.path.endsWith('/api') &&
+        (cleanPath == '/api' || cleanPath.startsWith('/api/'))) {
       cleanPath = cleanPath.substring(4);
     }
-    return Uri.parse('$base$cleanPath');
+    return base.replace(
+      path: '${base.path}$cleanPath',
+      query: request.hasQuery ? request.query : null,
+      fragment: request.hasFragment ? request.fragment : null,
+    );
   }
 
-  static String _normalizeBaseUrl(String raw) {
-    final trimmed = raw.trim();
-    return trimmed.endsWith('/')
-        ? trimmed.substring(0, trimmed.length - 1)
-        : trimmed;
+  static Uri _validatedBase([String? override]) {
+    final define = _configuredBase.trim();
+    final configured = define.isEmpty ? _assetBase : define;
+    final address =
+        override?.trim() ??
+        (configured.isEmpty && kDebugMode ? _developmentBase : configured);
+    final base = Uri.tryParse(address);
+    if (base == null ||
+        (base.scheme != 'http' && base.scheme != 'https') ||
+        base.host.isEmpty) {
+      throw const FormatException(
+        'Chưa cấu hình API_BASE_URL hợp lệ cho ứng dụng.',
+      );
+    }
+    return base.replace(path: base.path.replaceFirst(RegExp(r'/+$'), ''));
   }
+
+  static String get _developmentBase =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+      ? _androidDebugBase
+      : 'http://localhost:8080/api';
 }

@@ -30,6 +30,10 @@ class ScamShieldApp extends StatelessWidget {
 
     return MultiProvider(
       providers: [
+        ListenableProvider<ValueNotifier<ThemeMode>>(
+          create: (_) => ValueNotifier(ThemeMode.light),
+          dispose: (_, mode) => mode.dispose(),
+        ),
         Provider<AuthRepository>.value(value: repository),
         Provider<UserQuotaRepository>.value(value: quotaRepository),
         Provider<DisputeRepository>.value(value: disputes),
@@ -52,11 +56,15 @@ class ScamShieldApp extends StatelessWidget {
           },
         ),
       ],
-      child: MaterialApp(
-        title: 'ScamShield',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        home: const HomeScreen(),
+      child: Consumer<ValueNotifier<ThemeMode>>(
+        builder: (_, mode, _) => MaterialApp(
+          title: 'ScamShield',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          themeMode: mode.value,
+          home: const HomeScreen(),
+        ),
       ),
     );
   }

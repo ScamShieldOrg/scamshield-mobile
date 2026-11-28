@@ -47,7 +47,10 @@ class GuestMenu extends StatelessWidget {
         ? authState.session != null
         : user != null || onSignOut != null;
     final colors = Theme.of(context).colorScheme;
-    final isLight = colors.brightness == Brightness.light;
+    final themeMode = context.watch<ValueNotifier<ThemeMode>?>();
+    final isLight = themeMode != null
+        ? themeMode.value == ThemeMode.light
+        : colors.brightness == Brightness.light;
     return Drawer(
       width: 292,
       shape: const RoundedRectangleBorder(
@@ -199,7 +202,11 @@ class GuestMenu extends StatelessWidget {
                   ),
                 ),
                 value: isLight,
-                onChanged: onLightModeChanged,
+                onChanged: themeMode == null
+                    ? onLightModeChanged
+                    : (enabled) => themeMode.value = enabled
+                          ? ThemeMode.light
+                          : ThemeMode.dark,
               ),
             ),
             const SizedBox(height: 14),
